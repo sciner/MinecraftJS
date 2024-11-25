@@ -284,6 +284,8 @@
                 this.resize_factor      = 1.5 // Coefficient of buffer resizing
                 this.used_polygons      = 0
                 this.mesh               = new THREE.Mesh(new THREE.BufferGeometry(), shader_material)
+                this.mesh.castShadow = true
+                this.mesh.receiveShadow = true
                 this.buffer             = new ArrayBuffer(0)
                 this.vertices           = new Float32Array(this.buffer, 0, 0)
                 this.uvs                = new Float32Array(this.buffer, 0, 0)
@@ -1016,8 +1018,17 @@
         const scene = new THREE.Scene()
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000)
         const renderer = new THREE.WebGLRenderer({ antialias: false, precision: 'highp' })
+        renderer.shadowMap.enabled = true
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap
         renderer.setPixelRatio(window.devicePixelRatio)
         renderer.setSize(window.innerWidth, window.innerHeight)
+        const light = new THREE.DirectionalLight(0xffffff, 1)
+        light.castShadow = true
+        light.shadow.mapSize.width = 1024
+        light.shadow.mapSize.height = 1024
+        light.shadow.camera.near = 0.5
+        light.shadow.camera.far = 500
+        scene.add(light)
         scene.background = fog_color
         camera.position.set(init_pos.x, init_pos.y, init_pos.z)
 
@@ -1125,6 +1136,7 @@
                             in_water: 0.0,
                             fogFar: render_distance * chunk_size.x,
                             texture: texture,
+                            // shadowMatrix: { value: light.shadow.matrix },
                         }
                     }
                 },
@@ -1138,8 +1150,13 @@
                         float time;
                         float in_water;
                         sampler2D texture;
+                        // mat4 shadowMatrix[NUM_DIR_LIGHTS];
                     };
                     uniform Data data;
+
+                    // #include <common>
+                    // #include <shadowmap_pars_vertex>
+                    // #include <packing>
 
                     varying vec3 vColor;
                     varying vec3 vWorldPosition;
@@ -1150,9 +1167,6 @@
                     varying float vTime;
                     varying float vInWater;
                     varying vec3 vNormal;
-
-                    #include <common>
-                    #include <shadowmap_pars_vertex>
 
                     bool checkFlag(int bit) {
                         float rounded = floor(vFlag + 0.5); // Round the value
@@ -1185,6 +1199,7 @@
                             modifiedPosition.z += cos(position.z * 2.0 + data.time * 2.) * 0.0625;
                         }
 
+                        // vShadowCoord = data.shadowMatrix[0] * worldPosition;
                         gl_Position = projectionMatrix * modelViewMatrix * vec4(modifiedPosition - data.cameraOffset, 1.0);
                     }
                 `,
@@ -1207,8 +1222,12 @@
                         float time;
                         float in_water;
                         sampler2D texture;
+                        // mat4 shadowMatrix[NUM_DIR_LIGHTS];
                     };
                     uniform Data data;
+
+                    // #include <shadowmap_pars_fragment>
+                    // #include <packing>
 
                     const int FLAG_WATER_ANIMATED = 1;
                     const int FLAG_GRASS_BLOCK_SIDE = 2;
@@ -1311,6 +1330,10 @@
                         float distanceToCamera = length(vWorldPosition - data.cameraPosition);
 
                         distanceToCamera *= vInWater > 0.0 ? 6.0 : 1.0;
+
+                        // Apply shadows
+                        // float shadowFactor = texture2DShadow(shadowMap[0], vShadowCoord.xyz); // Added for shadow calculation
+                        // finalColor *= shadowFactor; // Apply shadow factor
 
                         // Apply fog
                         float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);

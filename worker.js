@@ -21,7 +21,7 @@ function processQueue() {
 
 // Импорты
 Promise.all([
-    import('../../vendors/simplex-noise.js').then(async (module) => {
+    import('./simplex-noise.js').then(async (module) => {
         SimplexNoise = module
         noise2d = module.createNoise2D(pseudoRandom(seed))
     }),
