@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Cube</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r110/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r110/examples/js/controls/PointerLockControls.js"></script>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/simplex-noise@2.4.0/simplex-noise.min.js"></script>
+</head>
+<body>
+
+
+    <script>
+        // let pnw1 = performance.now()
+        const textures = {
+            dirt: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAFVBMVEW5hVyHh4eWbEpsbGx0WER5VTpZPSnqDkA3AAAAbklEQVR42hXLwQnDQAwEwOVA7uDyNgq6AtJD/mLD6m0Muv5LCJ7/YES6OhNsvjLGhpXJtA1vW+nMQJy31o+Ncu4uJUwzDSQE13I5giyGGuxqCQTTxnX4RPDkJ+5ChZskgPp6HemIqwp8+ojp8voDZ2EdYwBe7AYAAAAASUVORK5CYII='},
+            bedrock: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAAAAAA6mKC9AAAAcElEQVR42jWPMQ0DQBSFvpazgBgEPFHYbdKmCwth4AZgM0E8ttai9pDjwQNCzZ1tPlMAvEcAwmrjUFF4X3A190e8U/EnkXkrQVeruq8TmUC7LVY8qsE9FVy51TuBCQsAby2fwMPVbcI/An9zNdwD9wFD0lUf95ycGwAAAABJRU5ErkJggg=='},
+            gravel: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAGFBMVEWwrq6xoqKXl5eWjo6JgX6Bf39ya2lkW1tYVrIwAAAAe0lEQVR42g3GwRECIQwF0D/MWIENODtk7YC7DOFulqQANFCAsvXrOz18Uxd3MZBptVUydNZCbf+HueveFO9ncp3CWK+zUCBD/Wjo8VRsHKkNjYjkra6bo41gxMbwHKcY36ExXwaLwVjlkTZBmdIONULmMo4yM/zqyuz+A5MJJSnE6Mt8AAAAAElFTkSuQmCC'},
+            oak_leaves: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAD1BMVEUAAAC5vLmYmZh3dXdoZGjJX6haAAAAAXRSTlMAQObYZgAAAGlJREFUeNoFgAERwyAMAD8pAtJ0AgIYaAEBbI1/TTtSNOaPiyCHDqkwtVvIia7tHzB6p1IatFtW8gazuB93e1j7tBwy8PJtR4+OkW+0cDR2exThSqQeASMalo9QZe2iV8XcmbgRp5W8Rf/WMg1MmmHulQAAAABJRU5ErkJggg=='},
+            oak_log: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAElBMVEWYeEmRcUJ0WjZfSitMPSY4Kxj0FtFUAAAAaklEQVR42hXGQRHDMAwEQI1VBJINwLoTgLgEaiHohD+YOPtaoaXl3BBqas6C5DeVPBkgkOXSkVDQxKpT+8kqX2ZvbrvCYcJ/XHA3iV8sdLslJhI84UnLVvIJH5qxpJXRGSG2Y5D7TXXGxgPEiBE7ybf/RAAAAABJRU5ErkJggg=='},
+            oak_log_top: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAG1BMVEXCnWK4lF+vj1WfhE2WdEF+Yjd0WjZfSitMPSYsJcj4AAAAf0lEQVR42hXJsQ3CMBAF0H/OFxGNfZHoI8gqzMIMjMFCVGwAdQCxgO8EHZKP8NrHY0vhRY3rk8BG62n7aoHpQnzPKtEpxbcAXFksjZ6vQh8+D2StRA0pVjfEQvECFYinqtD0PbX6L2szIGCBBYJLdTsFcCPm4Z5TXbE/SHgp/gPG/zIQFSN2ggAAAABJRU5ErkJggg=='},
+            stone: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAAAAAA6mKC9AAAAZElEQVR42jWNsQ0AMQjEGJcB3HsEr/xSkncBOgkfUyXIguoo4mEXGdkFFvBdlGmpwKCAWIWOeYFladCK4n2BXZZn6vR3dsXRfLnKWfFoXmtUrX81AiboaZ9u4I1G8KdqPICl6AdyLn2NfcJFIAAAAABJRU5ErkJggg=='},
+            stone_bricks: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAFVBMVEWcmZyLiYt/f394dnhqbWpjY2NaWVo/4AZ+AAAAbUlEQVR42hWJsREDIRDEuC3A7F7gmKMDXK5bIHFLXwHwDWBeo0AzAtOD3rhd8qqEnSUOEqZh29cTMZA1wb0iXy+iIeQNhKpqSBn923/9gCbnOhcXSWMh8jLavTaMeR4dCk97lQlZ4ic8IKlUSX8TNSDr6TM/jQAAAABJRU5ErkJggg=='},
+            sand: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAElBMVEXt68vn5Lvj27Daz6PVxJbRuopf1Q47AAAAZklEQVR42gVAwQ3CMBCzQPyRukEcBqjP/dNzWAC6/ywIm0y2GrH72h47eJ1VdqDpOdqF3FuqCK7BzApOv7N+Nlyx126E+nQYbKl1uCYOWcVLWMWMlSDdfnIJ5EtSBdKN5LdADrnIP0wTGY7btIheAAAAAElFTkSuQmCC'},
+            grass_block_top: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAADAFBMVEU3Wx5IeCg2Wh4xUhs1WB0vTho0Vh06YSA3XB8zVRwyUxwyVBw+ZyIpRRc0Vx03XB47YiE4XR84Xh8vTxowUBo+aCI9ZiIzVhw8ZCEuTRkxURs1WR07YiBAaiMsSRhDcCUrSRg1WR4wURs/aiNAayNFciYrSBg/aSMuThosShgwTxo5XyA5YCBDbyUuTBk8ZSFCbiRDcSVHdictShktTBktSxk7YyFGdicAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEdUADQdjt2OxUAAAAAAAABAAAAAABzhKHtiHcAAE8AAAAAADAAAAAAAAAAAABzhPgAAHcAAAAAAAAAAAAAAAB0AAB2OxYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4gBTQOHcAAIMAfQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGQAAADIAAAAh/UAADYAAAAQAAAANgCDs1jQOAC4AIMAh/V9AAAAAADEAAAAT+10PTau2XcAd3UAAAAAAAAAAAAAAAAAAAAAAADvRADOvYB2LAhP7mgJKQC3diwAAAAAAAAAAACewAB2LAkAAGAABQCAAAAAAAAQAIAAAMBwAAAAAAYAAAAAAwAAAAAAAAB6AHjQOACAAIMAT+4AAAAAAAA4AAAAg9AAAACzYAAAd3cAAAAAAAAAAAAAAAAAAAAAABgAAAAIAAAAT+4AAEAAAABYAAAAT+6o1rAAAAkMAH3zqL15AAAAAWJLR0SL8m9H4AAAAAlwSFlzAAALEwAACxMBAJqcGAAAAOFJREFUGNMNzMligjAUAMDHSwJkaSBhDUgR0ILBKhVr///P6nEuAxAgIZSFUcyFVB8akjA1NrM5K0oMQlFBrV0jZdvCQXXiM+vhSLgZrEM2akMr5aAeu3E6yen8lal5kRqsvZQ+TlaRyPHyNizXssWRs0Z8T4MyFKiIqvZ2b0wnPE1ZAWrt58l3123OkWC0gMl/dGjnTAxY6I16WCNT5r3Gx65GKt9H05HaNCgNhs+NOQ5n47kdyC8fuDuUuwGvjuisD16o1lSqE9Svx3ObAZckEUVU7UBiKe8WUP/diqaV0T9QvxT8vFJhIAAAAABJRU5ErkJggg=='},
+            water_still: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAIABAMAAAB5lPHgAAAAJ1BMVEX////5+fnY2NjW1tbV1dXT09PS0tLPz8/Ozs7CwsK4uLiurq6lpaUTLc7BAAAADXRSTlO0tLS0tLS0tLS0tLS0frXQ3wAABWRJREFUeNqN2D2OHLcSB/AC3pO8/XyCd4B3hHcE5+Ng1qY62UQCBpsosAwoE+AvbDZJD1BbSmXA2MTJGqD/dYOqQ3lYZH/M9IxsBgOCPWz+UF1kk00CN+DwHbkDcHcqP2BxUs8CBsihbm4gVwhEnQSl3Hb0TY9SZ6J0l3KWZ/Io5hR9MkDemqhdiUsAq5YWy/ReKePr/0IAegrP8OPKg5VHyN0E4k4YPd8Wj4bnZoe1ByuPn3k800PxbDoIhPrwPP8rPLb25PBg5VEAh442T3gKz4t0k5D7yWMUoVh4fOVB9dw1Ty6eBDdB/jeZQ+PPBnNIeHDJg/A4BL92tBf04dm9Onq4eczC49c9DjCa53D04MzzI5nntQeTx1cexmHhSdubHsNu8sRYduoxd1t7MITndjd5GPmH2QOYG48ehEeXHl14DsXjloiH4ukemwfNY9DZAzPTUpHqsaVnSNxnoaSeOeJjvPT0xWNLT36qHh095XkNk4dJjsBMQUduHr/msdnzGB7mYeH5YeFRjB6HhcfC05O5ifrSw8i9Ljw8enJj2KkHk2fOnz+b53A/e36ZPRnFcw+SMSH1gkfBZb4LcgqP8EvB/ujBZzxYemT05PBkPvbG0aP5lRQPhuphKZ4vc/XY6DFw8/jCg8mT00UPrniQV55N8zxvhb8gw3bp6U48Xj2+9GRswsPNw8Bh9gyN0Qa1uPPSA1z09EfPo/AN+egZiietPIAUz1P1ZMwehAcCDN1AcuaRhUcNWHu4q567h4gPnlmYyPH6Y3j2PdxeFY/OHm0eyMJze+7Ju+3oOZBe8xjhkifT++LB5Hkhpu602cFt+2KgvnoyqYcHlzwGwO235knV41c9DD3xqDuPnpt3zTMIb2fPvtOj5+eB7hcehEcnD4rnsCN4eLh5+M3Kg7/xWPNg8vxx9DyS5zE+xfP6w0BdeDKTX/EMqXp09ODo4aoYrnmw9txXD33FIC6exEyWO/HJ8+bt2qMrDxPcqqdHtL0k1s95PoVHTz198/xPQCz4/ZCkeXz0vHz7if5zydMSEgCDZfTk0fOmeSQvPK1QVtsK6kbIZk+WM89mJ5mMd6MHxbOlnz5G9g+zB3/reT15GsNOPRuGY/Ro9eCKJ4Wnzi96m5Yeg517ZPJY87gjb2fPetuD4pEzDwQYPQjPvnm4evZp9Ejx/DZ6ZOUZmMQNrj56kJoHuOjBXRo9duLx6lHKOPfE+vzhLdNPOnl89DjQ8plTnV8W45NUD1P+nMc2SVyj5YLn/1ASYH8b+SzNw6OnCw8zuauGx7wtsLNHDf/c47YRXPd81TxblmHhARwfvl96TKMfmfvoEU44JMrhMZAwoJB81RMM24dHTz3SPO+q55Bk6cnFQ++EduGRXPeHQHiiWjxpV9Znnj0MZEH12AUPSE88uc332fO+eNQGBn4tno/NY270AHqqM6XuD9tOODxGCqSE4X72gBlaPKgeu+Bxt9+XHg0PIE5uyHcPNT6PjLwpHjQPLL/sQBIKAVUEEB7U+HDaYehoACQ8zFtBCSbO4qMnnj9mDwuap1cyZL7rABJY5qNt9gBmeBEeg+XwYI4PEJ6cUvEcAIGbEPPt0mPNY2eeZ8C9eMwYzZPj/cV82zyQ8ACwEw8UwJnHJg+HZy+T5656tHqseVTJbfbkyYPJw1/W8852Fx4vnpuFR82x68885sWjkwfMxbOpHqZUPPOyPHqAk/j45MHs+dQVz2HHqXoMyF+QKYDqcUeq5/fxfKqTRyDT+rxdeF7zXb/0+Oq8HELo7GnU/Oboydh3LJNn+OXq95a1R714wNP3DQcT8SYtPHXQtce8emzyWKaH6oEAfwHoySkS2Hjk2AAAAABJRU5ErkJggg=='},
+        }
+        const player_height = 1.8
+        let spectator_mode = false
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false
+        let moveUp = false, moveDown = false
+        const directions = [
+            { x: 0, y: 1, z: 0 },   // Верх
+            { x: 0, y: -1, z: 0 },  // Низ
+            { x: 0, y: 0, z: 1 },   // Перед
+            { x: 0, y: 0, z: -1 },  // Зад
+            { x: -1, y: 0, z: 0 },  // Лево
+            { x: 1, y: 0, z: 0 }    // Право
+        ]
+        const blocks_palette = {
+            dirt: [
+                {color: [0.4039, 0.2667, 0.1294], flag: 32, texture: textures.dirt}, // Верх — зеленый
+                {color: [0.4039, 0.2667, 0.1294], flag: 32, texture: textures.dirt}, // Низ — коричневый
+                {color: [0.4039, 0.2667, 0.1294], flag: 32, texture: textures.dirt}, // Перед — коричневый
+                {color: [0.4039, 0.2667, 0.1294], flag: 32, texture: textures.dirt}, // Зад — коричневый
+                {color: [0.4039, 0.2667, 0.1294], flag: 32, texture: textures.dirt}, // Лево — коричневый
+                {color: [0.4039, 0.2667, 0.1294], flag: 32, texture: textures.dirt}, // Право — коричневый
+            ],
+            grass_block: [
+                {color: [99/256, 127/256, 64/256], texture: textures.grass_block_top}, // Верх — зеленый
+                {color: [0.4039, 0.2667, 0.1294], texture: textures.dirt}, // Низ — коричневый
+                {color: [0.4039, 0.2667, 0.1294], flag: 2 | 32, texture: textures.dirt}, // Перед — коричневый
+                {color: [0.4039, 0.2667, 0.1294], flag: 2 | 32, texture: textures.dirt}, // Зад — коричневый
+                {color: [0.4039, 0.2667, 0.1294], flag: 2 | 32, texture: textures.dirt}, // Лево — коричневый
+                {color: [0.4039, 0.2667, 0.1294], flag: 2 | 32, texture: textures.dirt}, // Право — коричневый
+            ],
+            stone: [
+                {color: [0.5451, 0.5333, 0.5294], texture: textures.stone}, // Верх — светло-серый
+                {color: [0.5451, 0.5333, 0.5294], texture: textures.stone}, // Низ — темно-серый
+                {color: [0.5451, 0.5333, 0.5294], texture: textures.stone}, // Перед — темно-серый (с оттенком)
+                {color: [0.5451, 0.5333, 0.5294], texture: textures.stone}, // Зад — темно-серый (с оттенком)
+                {color: [0.5451, 0.5333, 0.5294], texture: textures.stone}, // Лево — темно-серый
+                {color: [0.5451, 0.5333, 0.5294], texture: textures.stone}, // Право — темно-серый
+            ],
+            water: [
+                {color: [63/256, 118/256, 228/256], flag: 1, texture: textures.water_still}, // Верх — синий
+                {color: [63/256, 118/256, 228/256], texture: textures.water_still}, // Низ — синий
+                {color: [63/256, 118/256, 228/256], texture: textures.water_still}, // Перед — синий
+                {color: [63/256, 118/256, 228/256], texture: textures.water_still}, // Зад — синий
+                {color: [63/256, 118/256, 228/256], texture: textures.water_still}, // Лево — синий
+                {color: [63/256, 118/256, 228/256], texture: textures.water_still}, // Право — синий
+            ],
+            sand: [
+                {color: [0.8, 0.8, 0.6], texture: textures.sand}, // Верх — светло-коричневый
+                {color: [0.8, 0.8, 0.6], texture: textures.sand}, // Низ — светло-коричневый
+                {color: [0.8, 0.8, 0.6], texture: textures.sand}, // Перед — светло-коричневый
+                {color: [0.8, 0.8, 0.6], texture: textures.sand}, // Зад — светло-коричневый
+                {color: [0.8, 0.8, 0.6], texture: textures.sand}, // Лево — светло-коричневый
+                {color: [0.8, 0.8, 0.6], texture: textures.sand}, // Право — светло-коричневый
+            ],
+            oak_log: [
+                {color: [0.7, 0.7, 0.5], texture: textures.oak_log_top}, // Верх — коричневый
+                {color: [0.7, 0.7, 0.5], texture: textures.oak_log_top}, // Низ — коричневый
+                {color: [146/256, 108/256, 77/256], flag: 8, texture: textures.oak_log}, // Перед — коричневый
+                {color: [146/256, 108/256, 77/256], flag: 8, texture: textures.oak_log}, // Зад — коричневый
+                {color: [146/256, 108/256, 77/256], flag: 8, texture: textures.oak_log}, // Лево — коричневый
+                {color: [146/256, 108/256, 77/256], flag: 8, texture: textures.oak_log}, // Право — коричневый
+            ],
+            oak_leaves: [
+                {color: [0.0, 0.6, 0.0], flag: 16, texture: textures.oak_leaves}, // Верх — зеленый
+                {color: [0.0, 0.6, 0.0], flag: 16, texture: textures.oak_leaves}, // Низ — зеленый
+                {color: [0.0, 0.6, 0.0], flag: 16, texture: textures.oak_leaves}, // Перед — зеленый
+                {color: [0.0, 0.6, 0.0], flag: 16, texture: textures.oak_leaves}, // Зад — зеленый
+                {color: [0.0, 0.6, 0.0], flag: 16, texture: textures.oak_leaves}, // Лево — зеленый
+                {color: [0.0, 0.6, 0.0], flag: 16, texture: textures.oak_leaves}, // Право — зеленый
+            ],
+            bedrock: [
+                {color: [0.1, 0.1, 0.1], texture: textures.bedrock}, // Верх — черный
+                {color: [0.1, 0.1, 0.1], texture: textures.bedrock}, // Низ — черный
+                {color: [0.1, 0.1, 0.1], texture: textures.bedrock}, // Перед — черный
+                {color: [0.1, 0.1, 0.1], texture: textures.bedrock}, // Зад — черный
+                {color: [0.1, 0.1, 0.1], texture: textures.bedrock}, // Лево — черный
+                {color: [0.1, 0.1, 0.1], texture: textures.bedrock}, // Право — черный
+            ],
+            gravel: [
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.gravel}, // Верх — серый
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.gravel}, // Низ — серый
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.gravel}, // Перед — серый
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.gravel}, // Зад — серый
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.gravel}, // Лево — серый
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.gravel}, // Право — серый
+            ]
+        }
+
+        const face_offsets = [
+            { vertices: [-1, 1, -1, -1, 1, 1, 1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, -1], uv: [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0] }, // Верх
+            { vertices: [-1, -1, -1, 1, -1, -1, 1, -1, 1, -1, -1, -1, 1, -1, 1, -1, -1, 1], uv: [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1] }, // Низ
+            { vertices: [-1, -1, 1, 1, -1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1, -1, 1, 1], uv: [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1] }, // Перед
+            { vertices: [-1, -1, -1, -1, 1, -1, 1, 1, -1, -1, -1, -1, 1, 1, -1, 1, -1, -1], uv: [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0] }, // Зад
+            { vertices: [-1, -1, -1, -1, -1, 1, -1, 1, 1, -1, -1, -1, -1, 1, 1, -1, 1, -1], uv: [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0] }, // Лево
+            { vertices: [1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1, -1, 1], uv: [0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0] }, // Право
+        ]
+
+    </script>
+
+    <!-- Stats -->
+    <script>
+        var Stats = function() {
+            var e = 0
+            , t = document.createElement("div");
+            function l(e) {
+                return t.appendChild(e.dom),
+                e
+            }
+            function n(l) {
+                for (var n = 0; n < t.children.length; n++)
+                    t.children[n].style.display = n === l ? "block" : "none";
+                e = l
+            }
+            t.style.cssText = "position:fixed;top:0;left:0;cursor:pointer;opacity:0.9;z-index:10000",
+            t.addEventListener("click", function(l) {
+                l.preventDefault(),
+                n(++e % t.children.length)
+            }, !1);
+            var a = (performance || Date).now()
+            , i = a
+            , o = 0
+            , r = l(new Stats.Panel("FPS","#0ff","#002"))
+            , f = l(new Stats.Panel("MS","#0f0","#020"));
+            if (self.performance && self.performance.memory)
+                var c = l(new Stats.Panel("MB","#f08","#201"));
+            return n(0),
+            {
+                REVISION: 16,
+                dom: t,
+                addPanel: l,
+                showPanel: n,
+                begin: function() {
+                    a = (performance || Date).now()
+                },
+                end: function() {
+                    o++;
+                    var e = (performance || Date).now();
+                    if (f.update(e - a, 200),
+                    e > i + 1e3 && (r.update(1e3 * o / (e - i), 100),
+                    i = e,
+                    o = 0,
+                    c)) {
+                        var t = performance.memory;
+                        c.update(t.usedJSHeapSize / 1048576, t.jsHeapSizeLimit / 1048576)
+                    }
+                    return e
+                },
+                update: function() {
+                    a = this.end()
+                },
+                domElement: t,
+                setMode: n
+            }
+        };
+        Stats.Panel = function(e, t, l) {
+            var n = 1 / 0
+            , a = 0
+            , i = Math.round
+            , o = i(window.devicePixelRatio || 1)
+            , r = 80 * o
+            , f = 48 * o
+            , c = 3 * o
+            , d = 2 * o
+            , s = 3 * o
+            , p = 15 * o
+            , u = 74 * o
+            , m = 30 * o
+            , h = document.createElement("canvas");
+            h.width = r,
+            h.height = f,
+            h.style.cssText = "width:80px;height:48px";
+            var S = h.getContext("2d");
+            return S.font = "bold " + 9 * o + "px Helvetica,Arial,sans-serif",
+            S.textBaseline = "top",
+            S.fillStyle = l,
+            S.fillRect(0, 0, r, f),
+            S.fillStyle = t,
+            S.fillText(e, c, d),
+            S.fillRect(s, p, u, m),
+            S.fillStyle = l,
+            S.globalAlpha = .9,
+            S.fillRect(s, p, u, m),
+            {
+                dom: h,
+                update: function(f, v) {
+                    n = Math.min(n, f),
+                    a = Math.max(a, f),
+                    S.fillStyle = l,
+                    S.globalAlpha = 1,
+                    S.fillRect(0, 0, r, p),
+                    S.fillStyle = t,
+                    S.fillText(i(f) + " " + e + " (" + i(n) + "-" + i(a) + ")", c, d),
+                    S.drawImage(h, s + o, p, u - o, m, s, p, u - o, m),
+                    S.fillRect(s + u - o, p, o, m),
+                    S.fillStyle = l,
+                    S.globalAlpha = .9,
+                    S.fillRect(s + u - o, p, o, i((1 - f / v) * m))
+                }
+            }
+        }
+
+    </script>
+
+    <!-- PlayerController -->
+    <script>
+
+        class PlayerController {
+
+            constructor(world, gravity = 9.8, inertia = 0.99, start_position) {
+                this.world = world
+                this.gravity = gravity
+                this.inertia = inertia
+                this.position = start_position // Текущая позиция игрока
+                this.velocity = { x: 0, y: 0, z: 0 } // Скорость игрока
+                this.isGrounded = false // Находится ли игрок на земле
+                this.jumpForce = 5 // Сила прыжка
+            }
+
+            update(elapsed_ms) {
+                const elapsed_seconds = elapsed_ms / 1000
+                const margin = 0.2 // Минимальное расстояние до блока
+
+                // Проверяем блок под игроком
+                const blockBelow = this.world.getBlockAt(
+                    Math.floor(this.position.x),
+                    Math.floor(this.position.y - 0.5), // Слегка ниже текущей позиции
+                    Math.floor(this.position.z)
+                )
+                this.block_below = blockBelow
+
+                // Устанавливаем флаг isGrounded
+                this.isGrounded = blockBelow !== 0
+
+                // Применяем гравитацию
+                if (!this.isGrounded) {
+                    this.velocity.y -= this.gravity * elapsed_seconds
+                }
+
+                // Рассчитываем движение
+                let moveVector = { x: 0, z: 0 }
+                if (moveForward) {
+                    const dir = new THREE.Vector3()
+                    camera.getWorldDirection(dir)
+                    moveVector.x += dir.x
+                    moveVector.z += dir.z
+                }
+                if (moveBackward) {
+                    const dir = new THREE.Vector3()
+                    camera.getWorldDirection(dir)
+                    moveVector.x -= dir.x
+                    moveVector.z -= dir.z
+                }
+                if (moveLeft) {
+                    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camera.getWorldDirection(new THREE.Vector3())).normalize()
+                    moveVector.x += right.x
+                    moveVector.z += right.z
+                }
+                if (moveRight) {
+                    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camera.getWorldDirection(new THREE.Vector3())).normalize()
+                    moveVector.x -= right.x
+                    moveVector.z -= right.z
+                }
+
+                // Нормализуем движение для предотвращения ускорения при диагональном движении
+                const length = Math.sqrt(moveVector.x ** 2 + moveVector.z ** 2)
+                if (length > 0) {
+                    moveVector.x /= length
+                    moveVector.z /= length
+                }
+
+                // Применяем движение
+                const movement_speed = 100
+                this.velocity.x += moveVector.x * elapsed_seconds * movement_speed
+                this.velocity.z += moveVector.z * elapsed_seconds * movement_speed
+
+                // Применение инерции
+                this.velocity.x *= this.inertia
+                this.velocity.z *= this.inertia
+
+                // Рассчитываем новую позицию
+                let newPos = {
+                    x: this.position.x + this.velocity.x * elapsed_seconds,
+                    y: this.position.y + this.velocity.y * elapsed_seconds,
+                    z: this.position.z + this.velocity.z * elapsed_seconds
+                }
+
+                // Проверяем столкновения с миром, учитывая margin
+                const blockAtNewPosX = this.world.getBlockAt(
+                    Math.floor(newPos.x + Math.sign(this.velocity.x) * margin), // Проверка с учетом направления
+                    Math.floor(this.position.y),
+                    Math.floor(this.position.z)
+                )
+
+                if (blockAtNewPosX !== 0) {
+                    // Блокируем движение по X
+                    this.velocity.x = 0
+                    newPos.x = this.position.x
+                }
+
+                const blockAtNewPosZ = this.world.getBlockAt(
+                    Math.floor(this.position.x),
+                    Math.floor(this.position.y),
+                    Math.floor(newPos.z + Math.sign(this.velocity.z) * margin) // Проверка с учетом направления
+                )
+
+                if (blockAtNewPosZ !== 0) {
+                    // Блокируем движение по Z
+                    this.velocity.z = 0
+                    newPos.z = this.position.z
+                }
+
+                // Проверяем вертикальное столкновение
+                const blockAtNewPosY = this.world.getBlockAt(
+                    Math.floor(this.position.x),
+                    Math.floor(newPos.y),
+                    Math.floor(this.position.z)
+                )
+
+                if (blockAtNewPosY !== 0) {
+                    if (this.velocity.y < 0) {
+                        // Если падаем, то считаем, что игрок на земле
+                        this.isGrounded = true
+                    }
+                    this.velocity.y = 0
+                    newPos.y = this.position.y
+                }
+
+                // Обновляем позицию
+                this.position = newPos
+            }
+
+
+            // Прыжок
+            jump() {
+                if (this.isGrounded) {
+                    this.velocity.y = this.jumpForce
+                    this.isGrounded = false
+                }
+            }
+
+        }
+
+    </script>
+
+    <!-- World -->
+    <script>
+        class World {
+
+            /**
+            * Хранит битовый массив мира (для определения занятых солид блоками)
+            * @param {Uint8Array} worldSizeInChunks
+            **/
+            blocks_bits
+
+            constructor(chunk_size, world_size_in_chunks) {
+                this.chunk_size = chunk_size
+                this.world_size_in_chunks = world_size_in_chunks
+                this.world_size = {
+                    x: this.world_size_in_chunks.x * this.chunk_size.x,
+                    y: this.world_size_in_chunks.y * this.chunk_size.y,
+                    z: this.world_size_in_chunks.z * this.chunk_size.z
+                }
+                // Массив, уменьшенный в 8 раз (байтовый массив)
+                const total_size = this.world_size.x * this.world_size.y * this.world_size.z
+                this.blocks_bits = new Uint8Array(Math.ceil(total_size / 8))
+            }
+
+            getBlockAt(x, y, z) {
+                if (!this.isInBounds(x, y, z)) return 0
+                const index = this.getIndex(x, y, z)
+                const byteIndex = Math.floor(index / 8)
+                const bitIndex = index % 8
+                return (this.blocks_bits[byteIndex] >> bitIndex) & 1
+            }
+
+            setBlockAt(x, y, z, value) {
+                if (!this.isInBounds(x, y, z)) return 0
+                const index = this.getIndex(x, y, z)
+                const byte_index = Math.floor(index / 8)
+                const bit_index = index % 8
+                if (value) {
+                    this.blocks_bits[byte_index] |= (1 << bit_index)
+                } else {
+                    this.blocks_bits[byte_index] &= ~(1 << bit_index)
+                }
+            }
+
+            getIndex(x, y, z) {
+                const ws = this.world_size
+                return x + y * ws.x + z * ws.x * ws.y
+            }
+
+            checkBlockAt(x, y, z) {
+                if (!this.isInBounds(x, y, z)) return 0
+                const index = this.getIndex(x, y, z)
+                const byte_index = Math.floor(index / 8)
+                const bit_index = index % 8
+                return (this.blocks_bits[byte_index] >> bit_index) & 1
+            }
+
+            checkNeighbors(x, y, z, neighbors) {
+                let cnt = 0
+                for (let i = 0; i < 6; i++) {
+                    const nx = x + directions[i].x
+                    const ny = y + directions[i].y
+                    const nz = z + directions[i].z
+                    // Проверка, есть ли сосед в пределах границ мира
+                    neighbors[i] = this.checkBlockAt(nx, ny, nz)
+                    cnt += neighbors[i]
+                }
+                return cnt > 0
+            }
+
+            isInBounds(x, y, z) {
+                return x >= 0 && x < this.world_size.x &&
+                    y >= 0 && y < this.world_size.y &&
+                    z >= 0 && z < this.world_size.z
+            }
+
+        }
+    </script>
+
+    <!-- CubesMeshBuilder -->
+    <script>
+
+        class CubesMeshBuilder {
+
+            constructor(reserve_faces = 1000, shader_material) {
+                const geometry = new THREE.BufferGeometry()
+                const material = shader_material // new THREE.MeshBasicMaterial({ vertexColors: true })
+                this.reserve_faces      = reserve_faces // Начальный резерв кубов
+                this.face_size          = 6 // Полигонов на куб
+                this.vertex_size        = 3 // Координаты x, y, z
+                this.uvs_size           = 2 // Координаты x, y, z
+                this.color_size         = 3 // Цветовые компоненты RGB
+                this.resize_factor      = 1.5 // Коэффициент увеличения резервной памяти
+                this.flag_size          = 1 // Размер для кастомного флага
+                this.vertices           = new Float32Array(this.reserve_faces * this.face_size * this.vertex_size)
+                this.uvs                = new Float32Array(this.reserve_faces * this.face_size * this.uvs_size)
+                this.colors             = new Float32Array(this.reserve_faces * this.face_size * this.color_size)
+                this.flags              = new Float32Array(this.reserve_faces * this.face_size * this.flag_size) // массив флагов
+                this.used_faces         = 0 // Количество добавленных кубов
+                this.mesh               = new THREE.Mesh(geometry, material)
+                this.mesh.castShadow    = true
+                this.mesh.receiveShadow = true
+            }
+
+            // Добавление куба в менеджер
+            addCube(x, y, z, size, faceColors, neighbours, change_colors = false) {
+
+                x += 0.5
+                y += 0.5
+                z += 0.5
+
+                if (this.used_faces >= this.reserve_faces) {
+                    this._resizeBuffers()
+                }
+
+                let faces_count = 0
+                if(!neighbours[0]) faces_count++
+                if(!neighbours[1]) faces_count++
+                if(!neighbours[2]) faces_count++
+                if(!neighbours[3]) faces_count++
+                if(!neighbours[4]) faces_count++
+                if(!neighbours[5]) faces_count++
+
+                if(faces_count == 6) return
+
+                const hs = size / 2 // half_size
+                const vertices_index = this.used_faces * this.face_size * this.vertex_size
+                const uvs_index = this.used_faces * this.face_size * this.uvs_size
+                const colorIndex = this.used_faces * this.face_size * this.color_size
+                const flagIndex = this.used_faces * this.face_size * this.flag_size
+
+                // Запись позиций напрямую
+                const vertices = this.vertices
+                const uvs = this.uvs
+                let vi = vertices_index
+                let ui = uvs_index
+
+                for (let fi = 0; fi < 6; fi++) {
+                    if (!neighbours[fi]) {
+                        const face = faceColors[fi]
+                        const uv = face.texture?.uv ?? [0, 0, 0, 0]
+                        const { vertices: faceVertices, uv: faceUV } = face_offsets[fi]
+
+                        for (let i = 0; i < faceVertices.length; i += 3) {
+                            vertices[vi++] = x + hs * faceVertices[i]
+                            vertices[vi++] = y + hs * faceVertices[i + 1]
+                            vertices[vi++] = z + hs * faceVertices[i + 2]
+                            // Добавляем UV, масштабируя их по значениям u, v, u2, v2
+                            uvs[ui++] = faceUV[(i / 3) * 2] === 0 ? uv[0] : uv[2]
+                            uvs[ui++] = faceUV[(i / 3) * 2 + 1] === 0 ? uv[1] : uv[3]
+                        }
+
+                        scene_info.quads++
+                    }
+                }
+
+                // Запись цветов напрямую
+                const colors = this.colors
+                const flags = this.flags
+                let ci = colorIndex
+                let fi = flagIndex
+
+                for (let i = 0; i < 6; i++) {
+                    if (neighbours[i]) continue // Если грань не выбрана, пропускаем
+                    // Если грань выбрана, записываем цвета
+                    const face = faceColors[i]
+                    const flag = face.flag || 0
+                    let [r, g, b] = face.color
+                    const rn = 1 - Math.random() * 0.1
+                    r *= rn
+                    g *= rn
+                    b *= rn
+                    if(change_colors) {
+                        r *= (1 - Math.random() * 0.35)
+                        g *= (1 - Math.random() * 0.35)
+                        b *= (1 - Math.random() * 0.35)
+                    }
+                    for(let p = 0; p < 6; p++) {
+                        colors[ci++] = r
+                        colors[ci++] = g
+                        colors[ci++] = b
+                        flags[fi++] = flag
+                    }
+                }
+
+                this.used_faces += faces_count
+            }
+
+            // Обновление меша из данных
+            updateMesh() {
+
+                const geometry = this.mesh.geometry
+                geometry.setAttribute(
+                    'position',
+                    new THREE.Float32BufferAttribute(this.vertices.slice(0, this.used_faces * this.face_size * this.vertex_size), 3)
+                )
+                geometry.setAttribute(
+                    'uv',
+                    new THREE.Float32BufferAttribute(this.uvs.slice(0, this.used_faces * this.face_size * this.uvs_size), 2)
+                )
+                geometry.setAttribute(
+                    'color',
+                    new THREE.Float32BufferAttribute(this.colors.slice(0, this.used_faces * this.face_size * this.color_size), 3)
+                )
+                geometry.setAttribute(
+                    'flag',
+                    new THREE.Float32BufferAttribute(this.flags.slice(0, this.used_faces * this.face_size * this.flag_size), 1)
+                )
+                geometry.computeVertexNormals()
+            }
+
+            // Увеличение памяти для буферов
+            _resizeBuffers() {
+                this.reserve_faces = Math.floor(this.reserve_faces * this.resize_factor)
+                const new_vertices = new Float32Array(this.reserve_faces * this.face_size * this.vertex_size)
+                const new_uvs = new Float32Array(this.reserve_faces * this.face_size * this.uvs_size)
+                const new_colors = new Float32Array(this.reserve_faces * this.face_size * this.color_size)
+                const new_flags = new Float32Array(this.reserve_faces * this.face_size * this.flag_size)
+                new_vertices.set(this.vertices)
+                new_uvs.set(this.uvs)
+                new_colors.set(this.colors)
+                new_flags.set(this.flags)
+                this.vertices = new_vertices
+                this.uvs = new_uvs
+                this.colors = new_colors
+                this.flags = new_flags
+            }
+
+            getMemoryUsageInMB() {
+                const total_size = (this.reserve_faces * this.face_size * this.vertex_size * Float32Array.BYTES_PER_ELEMENT) +
+                                (this.reserve_faces * this.face_size * this.color_size * Float32Array.BYTES_PER_ELEMENT);
+                return total_size / (1024 * 1024); // Возвращает в мегабайтах
+            }
+
+        }
+
+    </script>
+
+    <!-- main -->
+    <script>
+
+        const chunks = {
+            list: new Map(),
+            has(x, z) {
+                const xx = this.list.get(x)
+                if(!xx) return false
+                return xx.has(z)
+            },
+            add(x, z, chunk) {
+                if(!this.list.has(x)) {
+                    this.list.set(x, new Map())
+                }
+                this.list.get(x).set(z, chunk)
+            },
+        }
+
+        const fogColor = 0x87CEEB // Цвет ясного неба в Minecraft
+
+        let speed_mul = 1
+        const pnw               = performance.now()
+        const chunk_size        = {x: 24, y: 40, z: 24}
+        const world_size        = {x: 8, y: 4, z: 8}
+        const world             = new World(chunk_size, world_size)
+        const world_water       = new World(chunk_size, world_size)
+        const world_leaves      = new World(chunk_size, world_size)
+        const simplex           = new SimplexNoise('1')
+        const scene_info        = { quads: 0 }
+        const player_controller = new PlayerController(world, 9.8, 0.9, {
+            x: chunk_size.x * world_size.x / 2,
+            y: 100,
+            z: chunk_size.z * world_size.z / 2
+        })
+
+        console.log('World size:', world_size.x * chunk_size.x, world_size.z * chunk_size.z)
+        console.log(world.blocks_bits.length.toLocaleString(), '; Time:', (performance.now() - pnw).toFixed(2) + 'ms')
+
+        let shader_material
+
+        let manager
+        let manager_transparent
+
+        const scene = new THREE.Scene()
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000)
+        const renderer = new THREE.WebGLRenderer({ antialias: false, precision: 'highp' })
+        renderer.setPixelRatio(window.devicePixelRatio) // Настраиваем разрешение канваса
+        renderer.setSize(window.innerWidth, window.innerHeight) // Устанавливаем размер
+        renderer.shadowMap.enabled = true
+        scene.background = new THREE.Color(fogColor) // Устанавливаем фон
+        document.body.appendChild(renderer.domElement)
+
+        function createShaderMaterial(texture) {
+            texture.minFilter = THREE.NearestFilter // Для уменьшения
+            texture.magFilter = THREE.NearestFilter // Для увеличения
+            texture.needsUpdate = true // Обновляем текстуру
+            return new THREE.ShaderMaterial({
+                uniforms: THREE.UniformsUtils.merge([
+                    THREE.UniformsLib.lights, // Подключаем освещение и шедоумапы
+                    {
+                        cameraPosition: { value: new THREE.Vector3() }, // Передаем позицию камеры
+                        fogColor: { value: new THREE.Color(0x87CEEB) }, // Цвет тумана
+                        fogNear: { value: 100.0 }, // Начало тумана
+                        time: { value: 0.0 }, // текущее время
+                        fogFar: { value: world_size.x * chunk_size.x * 2 }, // Конец тумана
+                        texture: { value: texture }, // передача текстуры
+                    }
+                ]),
+                vertexShader: `
+                    precision highp float;
+
+                    varying vec3 vColor;
+                    varying vec3 vWorldPosition;
+                    varying vec4 vShadowCoord;
+                    varying vec2 vUv; // Передаём UV во фрагментный шейдер
+                    attribute float flag;
+                    varying float vFlag;
+                    uniform float time;
+                    varying float vTime;
+
+                    // attribute vec3 normal; // Исходная нормаль
+                    varying vec3 vNormal;
+
+                    #include <common>
+                    #include <shadowmap_pars_vertex> // Подключаем расчеты для шедоумап
+
+                    bool checkFlag(int bit) {
+                        float rounded = floor(vFlag + 0.5); // Округляем значение
+                        float divisor = float(bit);
+                        return mod(floor(rounded / divisor), 2.0) >= 1.0; // Проверяем, установлен ли бит
+                    }
+
+                    void main() {
+                        vUv = uv;
+                        vTime = time;
+                        vFlag = flag; // Передаем во фрагментный шейдер
+                        // vUV = uv; // Передача UV во фрагментный шейдер
+                        vColor = color;
+                        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                        vWorldPosition = worldPosition.xyz;
+                        vNormal = normal; // Передаём нормаль во фрагментный шейдер
+
+                        // Вычисляем координаты для шедоумапы
+                        #include <worldpos_vertex>
+                        #include <shadowmap_vertex>
+
+                        // waves
+                        vec3 modifiedPosition = position;
+                        if (checkFlag(1)) {
+                            // волны воды
+                            modifiedPosition.y -= 2./16.;
+                            modifiedPosition.y += sin(position.x * 2.0 + time * 2.) * 0.0625;
+                            modifiedPosition.y += cos(position.z * 2.0 + time * 2.) * 0.0625;
+                        } else if (checkFlag(16)) {
+                            // листва
+                            modifiedPosition.x += sin(position.x * 2.0 + time * 2.) * 0.0625;
+                            modifiedPosition.x += cos(position.z * 2.0 + time * 2.) * 0.0625;
+                            modifiedPosition.z += sin(position.x * 2.0 + time * 2.) * 0.0625;
+                            modifiedPosition.z += cos(position.z * 2.0 + time * 2.) * 0.0625;
+                        }
+
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(modifiedPosition, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    precision highp float;
+                    #extension GL_OES_standard_derivatives : enable
+                    uniform sampler2D map; // Добавьте текстуру
+                    varying vec2 vUv; // Принимаем UV из вершины
+                    varying float vTime;
+
+                    varying vec3 vColor;
+                    varying vec3 vWorldPosition;
+                    varying vec4 vShadowCoord;
+                    varying float vFlag;
+                    varying vec3 vNormal; // Получаем нормаль из вершинного шейдера
+
+                    // uniform vec3 cameraPosition; // Позиция камеры
+                    uniform vec3 fogColor;       // Цвет тумана
+                    uniform float fogNear;       // Начало тумана
+                    uniform float fogFar;        // Конец тумана
+
+                    uniform sampler2D texture; // Передаём текстуру в шейдер
+
+                    const int FLAG_WATER_ANIMATED = 1;
+                    const int FLAG_GRASS_BLOCK_SIDE = 2;
+                    // const int UNUSED_FLAG_GRAVEL = 4;
+                    // const int FLAG_ = 8;
+                    const int FLAS_ANIMATED_LEAVES = 16;
+                    // const int FLAG_ = 32;
+
+                    float hash(vec3 p) {
+                        p = fract(p * 0.1031);
+                        p += dot(p, p.yzx + 19.19);
+                        return fract((p.x + p.y) * p.z);
+                    }
+
+                    bool checkFlag(int bit) {
+                        float rounded = floor(vFlag + 0.5); // Округляем значение
+                        float divisor = float(bit);
+                        return mod(floor(rounded / divisor), 2.0) >= 1.0; // Проверяем, установлен ли бит
+                    }
+
+                    void main() {
+
+                        vec3 grass_color = vec3(84./256., 147./256., 42./256.);
+                        vec3 water_color = vec3(15./256., 94./256., 156./256.);
+
+                        // Расчет тени
+                        float shadow = 1.0;
+                        #if NUM_DIR_LIGHTS > 0
+                            shadow = texture2DShadow(shadowMap[0], vShadowCoord.xyz);
+                        #endif
+
+                        float scale = 16.0;
+                        vec3 pp = vWorldPosition;
+                        if(checkFlag(8)) {
+                            pp.y /= 2.0;
+                        }
+                        vec3 quantizedPos = floor(pp * scale + 1e-3); // Добавлен эпсилон
+                        float randomness = hash(quantizedPos);
+                        vec3 finalColor = vColor;
+
+                        vec2 uv = vUv;
+
+                        if (checkFlag(FLAG_WATER_ANIMATED)) {
+                            float frame_count = 32.0;
+                            float frame_height = 1.0 / frame_count;
+                            float current_frame = mod(floor(vTime * 16.), frame_count);
+                            uv.y = uv.y - frame_height * current_frame;
+                        }
+
+                        vec4 texColor = texture2D(texture, uv);
+
+                        if(texColor.a < 0.1) {
+                            discard;
+                        }
+
+                        if(checkFlag(FLAS_ANIMATED_LEAVES)) {
+                            texColor.rgb *= grass_color;
+                        }
+                        if(checkFlag(FLAG_WATER_ANIMATED)) {
+                            texColor.rgb *= water_color;
+                        }
+
+                        finalColor = texColor.rgb;
+
+                        if (checkFlag(FLAG_GRASS_BLOCK_SIDE)) {
+                            // шапка травы
+                            float quadY = mod(vWorldPosition.y, 1.0);
+                            if (quadY > 0.75) {
+                                // Изменяем цвет для верхней части квада
+                                finalColor = grass_color; // Красный цвет, например
+                                vec3 colorDeviation = vec3(randomness) * 0.2 - 0.1;
+                                finalColor = clamp(finalColor + colorDeviation, 0.0, 1.0) * shadow;
+                            }
+                        }
+
+                        // Вычисляем нормаль на основе позиции
+                        vec3 normal = normalize(vNormal); // Нормализуем перед использованием
+                        // Применяем изменение цвета в зависимости от нормали
+                        if (normal.y > 0.5) {
+                            finalColor *= 1.2; // Осветлить верх
+                        } else if (normal.y < -0.5) {
+                            finalColor *= 0.5; // Затемнить низ
+                        } else if (normal.z < 0.0) {
+                            finalColor *= 0.7; // Затемнить север
+                        } else if (normal.z > 0.0) {
+                            finalColor *= 0.7; // Осветлить юг
+                        } else {
+                            finalColor *= 0.9; // Остальные случаи
+                        }
+
+                        // Рассчитываем расстояние до камеры
+                        float distanceToCamera = length(vWorldPosition - cameraPosition);
+
+                        // Применяем туман
+                        float fogFactor = smoothstep(fogNear, fogFar, distanceToCamera);
+                        vec3 foggedColor = mix(finalColor, fogColor, fogFactor);
+
+                        float alpha = checkFlag(1) ? 0.75 : 1.0;
+                        gl_FragColor = vec4(foggedColor, alpha);
+                    }
+                `,
+                vertexColors: true,
+                side: THREE.FrontSide,
+                transparent: true, // Включить прозрачность
+            });
+
+        }
+
+        async function createTexture() {
+            const canvas = document.createElement('canvas')
+            const ctx = canvas.getContext('2d')
+            const keys = Object.keys(textures)
+            // Загружаем все текстуры и определяем их размеры
+            const images = await Promise.all(keys.map(key => {
+                const img = new Image()
+                img.src = 'data:image/png;base64,' + textures[key].bin
+                return new Promise(resolve => {
+                    img.onload = () => resolve({ key, img, width: img.width, height: img.height })
+                })
+            }))
+            // Определяем сторону атласа как ближайшую степень двойки от самой длинной стороны текстур
+            const maxSide = Math.max(...images.map(img => Math.max(img.width, img.height)))
+            const atlasSize = Math.pow(2, Math.ceil(Math.log2(maxSide)))
+            canvas.width = atlasSize
+            canvas.height = atlasSize
+            // Размещаем текстуры в атласе
+            let xOffset = 0
+            let yOffset = 0
+            let rowHeight = 0
+            images.forEach(img => {
+                if (xOffset + img.width > atlasSize) {
+                    xOffset = 0
+                    yOffset += rowHeight
+                    rowHeight = 0
+                }
+                if (yOffset + img.height > atlasSize) {
+                    throw new Error('Не удалось разместить все текстуры в атласе. Увеличьте размер атласа.')
+                }
+                ctx.drawImage(img.img, xOffset, yOffset, img.width, img.height)
+                // Сохраняем UV-координаты
+                textures[img.key].uv = [
+                    xOffset / atlasSize,
+                    1 - yOffset / atlasSize,
+                    (xOffset + img.width) / atlasSize,
+                    1 - (yOffset + img.width) / atlasSize
+                ]
+
+                xOffset += img.width
+                rowHeight = Math.max(rowHeight, img.height)
+            })
+            // function downloadCanvas(canvas, filename = 'atlas.png') {
+            //     const link = document.createElement('a')
+            //     link.download = filename
+            //     link.href = canvas.toDataURL('image/png')
+            //     link.click()
+            // }
+            // downloadCanvas(canvas, 'texture-atlas.png')
+            return new THREE.CanvasTexture(canvas)
+        }
+
+        // Подключение stats.js
+        const stats = new Stats()
+        stats.showPanel(0) // 0: FPS, 1: MS, 2: MB
+        document.body.appendChild(stats.domElement)
+
+        // Создаем элемент для отображения координат
+        const coords_el = document.createElement('div')
+        coords_el.style.position = 'absolute'
+        coords_el.style.top = '10px'
+        coords_el.style.right = '10px'
+        coords_el.style.color = 'white'
+        coords_el.style.fontSize = '16px'
+        coords_el.style.fontFamily = 'monospace'
+        document.body.appendChild(coords_el)
+
+        // Функция для обновления координат
+        function updateCoordinates(x, y, z) {
+            coords_el.textContent = `${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}`
+        }
+
+        function pseudoRandom(seed) {
+            let value = seed
+            return function() {0
+                value = (value * 16807) % 2147483647
+                return value / 2147483647
+            }
+        }
+
+        // Добавляем кубы
+        function generateChunk(_cx, _cz) {
+
+            // chunks.add(cx, cz, true)
+            let iter = 0
+            let chunks_count = 0
+            const pn = performance.now()
+            const faces = [0, 0, 0, 0, 0, 0]
+
+            let n0 = 0
+            let n2 = 0
+            let ocean = 0
+            let planing = 0
+
+            function getXZNoise(x, z) {
+                const x2 = x + 1024
+                const z2 = z + 1024
+                n0 = simplex.noise2D(x / 2, z / 2)
+                const n1 = simplex.noise2D(x / 64, z / 64)
+                n2 = simplex.noise2D(x2 / 16, z2 / 16)
+                const n3 = simplex.noise2D(x2 / 8, z2 / 8)
+                return (n1 * 0.7 + n2 * 0.25 + n3 * 0.05)
+            }
+
+            function calcH(x, z) {
+                ocean = simplex.noise2D((x - 8192) / 384, (z - 8192) / 384)
+                planing = (simplex.noise2D((x - 1024) / 256, (z - 1024) / 256))
+                const height = getXZNoise(x, z) * (32 * ((planing + 1) / 2))
+                return Math.ceil (
+                    (64 + ocean * 16) + (height < 0 ? height : height * 2)
+                )
+            }
+
+            function setBlock(layer, x, y, z, color, is_water = false, is_leaves = false) {
+                if(x < 0 || x >= world_size.x * chunk_size.x) return
+                if(y < 0 || y >= world_size.y * chunk_size.y) return
+                if(z < 0 || z >= world_size.z * chunk_size.z) return
+                const wrld = is_water ? world_water : is_leaves ? world_leaves : world
+                if(layer == 0) {
+                    wrld.setBlockAt(x, y, z, 1)
+                } else {
+                    const mgr = is_water ? manager_transparent : manager
+                    if(is_leaves || wrld.checkNeighbors(x, y, z, faces)) {
+                        mgr.addCube(x, y, z, 1, color, faces, is_leaves)
+                    }
+                }
+            }
+
+            function drawTree(layer, x, y, z, random) {
+                const ax = x
+                let ay = y
+                const az = z
+                const height = Math.ceil(random() * 8 + 2)
+                for(let yy = 0; yy < height; yy++) {
+                    setBlock(layer, x, y + yy, z, blocks_palette.oak_log)
+                }
+                // draw leaves
+                const radius = {xz: 3, y: 7}
+                ay += height
+                for(let xx = -radius.xz; xx <= radius.xz; xx++) {
+                    for(let yy = 0; yy <= radius.y; yy++) {
+                        for(let zz = -radius.xz; zz <= radius.xz; zz++) {
+                            if(xx * xx + yy * yy + zz * zz <= radius.xz * radius.xz) {
+                                setBlock(layer, ax + xx, ay + yy, az + zz, blocks_palette.oak_leaves, false, true)
+                            }
+                        }
+                    }
+                }
+            }
+
+            const water_level = 64
+            const tree_chance = 64
+
+            for(let layer = 0; layer < 2; layer++) {
+                for(let cx = 0; cx < world_size.x; cx++) {
+                    for(let cz = 0; cz < world_size.z; cz++) {
+
+                        const random = pseudoRandom(cx * 256 + cz)
+
+                        if (layer == 0) chunks_count++
+                        const hasTree = Math.round(simplex.noise2D(cx, cz) * 100)
+
+                        for(let bx = 0; bx < chunk_size.x; bx++) {
+                            for(let bz = 0; bz < chunk_size.z; bz++) {
+
+                                const x = cx * chunk_size.x + bx
+                                const z = cz * chunk_size.z + bz
+                                const h = calcH(x, z)
+
+                                for(let y = 0; y < 128; y++) {
+                                    const ax = x
+                                    const ay = y
+                                    const az = z
+                                    iter++
+                                    if(y < h) {
+                                        let block = blocks_palette.stone
+                                        const y_from_top = h - y
+                                        if(y < 80 + n2 * (8 * planing)) {
+                                            if(y == water_level - 1 && y == h - 1) {
+                                                block = blocks_palette.sand
+                                            } else if(y < n0 * 2 + 3) {
+                                                block = blocks_palette.bedrock
+                                            } else {
+                                                if(y_from_top == 1 && y > water_level - 1) {
+                                                    block = blocks_palette.grass_block
+                                                } else if(y_from_top < 3) {
+                                                    block = y < water_level ? blocks_palette.gravel : blocks_palette.dirt
+                                                }
+                                            }
+                                        }
+                                        setBlock(layer, ax, ay, az, block)
+                                    } else if(y < water_level && y >= h) {
+                                        setBlock(layer, ax, ay, az, blocks_palette.water, true)
+                                    }
+                                }
+
+                                if(h > water_level && h < 75 && Math.round(random() * tree_chance) == 0) {
+                                    drawTree(layer, x, h, z, random)
+                                }
+
+                            }
+                        }
+
+                    }
+                }
+            }
+            
+            const elapsed = performance.now() - pn
+            console.log('Iter:', iter.toLocaleString(), 'Chunks:', chunks_count.toLocaleString(), 'ChunksTime:', (elapsed/chunks_count).toLocaleString())
+            console.log('Quads:', scene_info.quads.toLocaleString(), 'Time:', elapsed.toFixed(2) + 'ms', 'Memory:', manager.getMemoryUsageInMB().toFixed(2) + 'MB')
+
+        }
+
+        camera.position.set(384/2, 90, 384/2)
+
+        const controls = new THREE.PointerLockControls(camera, document.body)
+        document.body.addEventListener('click', () => controls.lock())
+
+        const velocity = new THREE.Vector3()
+        const direction = new THREE.Vector3()
+        const up = new THREE.Vector3(0, 1, 0)
+
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'KeyW') moveForward = true
+            if (event.code === 'KeyS') moveBackward = true
+            if (event.code === 'KeyA') moveLeft = true
+            if (event.code === 'KeyD') moveRight = true
+            if (event.code === 'Space') moveUp = true
+            if (event.code === 'ShiftLeft') moveDown = true
+        })
+
+        document.addEventListener('keyup', (event) => {
+            if (event.code === 'KeyW') moveForward = false
+            if (event.code === 'KeyS') moveBackward = false
+            if (event.code === 'KeyA') moveLeft = false
+            if (event.code === 'KeyD') moveRight = false
+            if (event.code === 'Space') moveUp = false
+            if (event.code === 'ShiftLeft') moveDown = false
+        })
+
+        // on mouse wheel
+        document.addEventListener('wheel', (event) => {
+            const delta = event.deltaY
+            if (delta < 0) {
+                speed_mul *= 1.1
+            } else {
+                speed_mul *= 0.9
+            }
+        })
+
+        let bobParams = {
+            time: 0,           // Время для bobview
+            frequency: 8,      // Частота покачивания
+            amplitudeX: 0.05,  // Горизонтальная амплитуда
+            amplitudeY: 0.1,   // Вертикальная амплитуда
+            amplitude: 0.1,   // Вертикальная амплитуда
+            height: player_height        // Базовая высота камеры
+        }
+
+        let beft = 1
+
+        function applyBobView(position, isMoving, elapsedTime) {
+            if(!player_controller.isGrounded) {
+                elapsedTime = 0
+            }
+            const { frequency, amplitudeX, amplitudeY, height } = bobParams
+            // Если игрок движется, увеличиваем время
+            if (isMoving) {
+                beft = 1
+            } else {
+                beft *= 0.9
+            }
+            bobParams.time += elapsedTime * 0.001 * beft
+            // Смещение по Y (резкое вертикальное качание)
+            const offsetY = Math.abs(Math.sin(bobParams.time * frequency)) * amplitudeY
+            // Смещение по X (плавное горизонтальное качание)
+            const offsetX = Math.sin(bobParams.time * frequency * 0.5) * amplitudeX
+            // Возвращаем позицию с учетом эффекта
+            return {
+                x: position.x + offsetX,
+                y: position.y + height - offsetY,
+                z: position.z
+            }
+        }
+
+        let pnw1 = performance.now()
+
+        /**
+        */
+        function animate() {
+            stats.begin() // Начало замера
+
+            requestAnimationFrame(animate)
+
+            const elapsed = performance.now() - pnw1
+
+            if(spectator_mode) {
+
+                const speed = 0.025 * speed_mul
+                velocity.x *= 0.95
+                velocity.y *= 0.95
+                velocity.z *= 0.95
+
+                if (moveForward) velocity.z += speed
+                if (moveBackward) velocity.z -= speed
+                if (moveLeft) velocity.x += speed
+                if (moveRight) velocity.x -= speed
+                if (moveUp) velocity.y += speed
+                if (moveDown) velocity.y -= speed
+
+                // Рассчитываем направление движения относительно камеры
+                direction.set(0, 0, 0)
+                camera.getWorldDirection(direction)
+                direction.y = 0 // Движение только по горизонтали
+                direction.normalize()
+
+                const right = new THREE.Vector3().crossVectors(up, direction).normalize()
+
+                const move = new THREE.Vector3()
+                move.addScaledVector(direction, velocity.z)
+                move.addScaledVector(right, velocity.x)
+                move.y += velocity.y
+
+                controls.getObject().position.add(move)
+
+                // Обновляем панель с координатами
+                const cameraPosition = camera.position // Используйте ваши координаты
+                updateCoordinates(cameraPosition.x, cameraPosition.y, cameraPosition.z)
+
+            } else {
+
+                player_controller.update(elapsed)
+
+                // Обновление позиции камеры
+                const player_pos = player_controller.position
+                const isMoving = moveForward || moveBackward || moveLeft || moveRight
+                const cameraPos = applyBobView(player_pos, isMoving, elapsed)
+                controls.getObject().position.set(cameraPos.x, cameraPos.y, cameraPos.z)
+                // controls.getObject().position.set(player_pos.x, player_pos.y + player_height, player_pos.z)
+
+                // Обновляем панель с координатами
+                updateCoordinates(player_pos.x, player_pos.y, player_pos.z)
+
+            }
+
+            shader_material.uniforms.cameraPosition.value.copy(camera.position)
+            shader_material.uniforms.time.value = performance.now() / 1000
+            renderer.render(scene, camera)
+
+            shader_material.uniforms.cameraPosition.value.copy(camera.position)
+            renderer.render(scene, camera)
+
+            stats.end() // Конец замера
+
+            pnw1 = performance.now()
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight
+            camera.updateProjectionMatrix()
+            renderer.setSize(window.innerWidth, window.innerHeight)
+        })
+
+        document.addEventListener('keydown', (event) => {
+            switch (event.code) {
+                case 'KeyW': moveForward = true; break
+                case 'KeyS': moveBackward = true; break
+                case 'KeyA': moveLeft = true; break
+                case 'KeyD': moveRight = true; break
+                case 'Space': player_controller.jump(); break
+            }
+        })
+
+        document.addEventListener('keyup', (event) => {
+            switch (event.code) {
+                case 'KeyW': moveForward = false; break
+                case 'KeyS': moveBackward = false; break
+                case 'KeyA': moveLeft = false; break
+                case 'KeyD': moveRight = false; break
+                case 'F8': teleportRandomly(); break
+                case 'KeyG': {
+                    spectator_mode = !spectator_mode
+                    // switch coords
+                    if(spectator_mode) {
+                        const pos = player_controller.position
+                        controls.getObject().position.set(pos.x, pos.y + player_height, pos.z)
+                    } else {
+                        const pos = controls.getObject().position
+                        player_controller.position.x = pos.x
+                        player_controller.position.y = pos.y - player_height
+                        player_controller.position.z = pos.z
+                        player_controller.velocity.y = 0
+                    }
+                    event.preventDefault()
+                    event.stopPropagation()
+                    break
+                }
+            }
+        })
+
+        function teleportRandomly() {
+            // Укажите диапазон координат для телепортации
+            const range = 100;
+            const center = {
+                x: world_size.x * chunk_size.x / 2,
+                y: 100,
+                z: world_size.z * chunk_size.z / 2
+            } 
+            const randomX = center.x + Math.random() * range - range / 2;
+            const randomY = center.y + Math.random() * 16; // Чтобы не улетать слишком высоко
+            const randomZ = center.z + Math.random() * range - range / 2;
+            // Установите новую позицию
+            player_controller.position.x = randomX;
+            player_controller.position.y = randomY;
+            player_controller.position.z = randomZ;
+            // Обновите камеру
+            controls.getObject().position.set(randomX, randomY, randomZ);
+            player_controller.velocity.y = 0
+        }
+
+        createTexture().then(texture => {
+            shader_material = createShaderMaterial(texture)
+            manager = new CubesMeshBuilder(1000, shader_material)
+            manager_transparent = new CubesMeshBuilder(1000, shader_material)
+            generateChunk(0, 0)
+            // Обновляем меш
+            manager.updateMesh()
+            manager_transparent.updateMesh()
+            // Добавляем меши в сцену
+            scene.add(manager.mesh)
+            scene.add(manager_transparent.mesh)
+            animate()
+        })
+
+    </script>
+</body>
+</html>
