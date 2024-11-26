@@ -11,6 +11,7 @@
         .key { display: inline-block; border-radius: 4px; padding: .1em .5em; background-color:dimgrey; border: 2px solid #fff; }
         .coords { position: absolute; top: 10px; right: 10px; color: white; font-size: 16px; font-family: monospace; }
         #loading { position: absolute; color: white; font-weight: bold; text-shadow: 0 0 10px #333; z-index: -1; font-family: 'Courier New', Courier, monospace; left: 50%; top: 50%; transform: translate(-50%, -50%);}
+        #crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; width: 2em; height: 2em; pointer-events: none; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.1/three.js" integrity="sha512-HCh7TuJvWZ35Ixo/afKeBRbAUtnqQWOrpw5Fs1bdWjWILg175hy9XRmuqG/vWyAqBKvUZStGMAsqKmYKqP91YQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r110/examples/js/controls/PointerLockControls.js"></script>
@@ -19,6 +20,7 @@
 <body>
 
     <div id="loading">Loading...</div>
+    <div id="crosshair">+</div>
 
     <script type="module">
         // import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/+esm'
@@ -55,6 +57,9 @@
         }
 
         class PlayerController {
+            inventory = {
+                current_block: blocks_palette.stone,
+            }
 
             constructor(world, gravity = 9.8, inertia = 0.99, start_position) {
                 this.world = world
@@ -71,10 +76,10 @@
                 const margin = 0.2 // min dist to block
                 const block_legs = this.world.getBlock(this.position.x, this.position.y + 0.01, this.position.z)
                 const block_below = this.world.getBlock(this.position.x, this.position.y - 0.5, this.position.z) // check block under player
+                const in_water = block_legs?.id == 4
 
                 this.block_below = block_below
                 this.isGrounded = !block_below?.passable
-                const in_water = block_legs?.id == 4
 
                 // apply gravity
                 if (!this.isGrounded || in_water) {
@@ -184,13 +189,125 @@
                 }
 
                 // Update position
-                this.position = new_pos
+                return this.position = new_pos
+
             }
 
             jump() {
                 if (this.isGrounded) {
                     this.velocity.y = this.jumpForce
                     this.isGrounded = false
+                }
+            }
+
+            traceRay(origin, dir, any_block = false) {
+                const pickat_distance = spectator_mode ? 100 : 10
+                for(const result of this.raycast(origin, dir, pickat_distance, any_block)) {
+                    return {...result, hit: true}
+                }
+                return { hit: false }
+            }
+
+            /**
+             * Алгоритм DDA (Digital Differential Analyzer)
+             */
+            *raycast(origin, dir, pickat_distance, any_block) {
+                const eps        = 1e-5
+                const item       = {point: null, direction: null, side: null, block: null}
+                const side       = new THREE.Vector3() // с какой стороны AABB упал луч
+                const direction  = new THREE.Vector3().copy(dir).normalize()
+                const step_x     = direction.x > 0 ? 1 : -1
+                const step_y     = direction.y > 0 ? 1 : -1
+                const step_z     = direction.z > 0 ? 1 : -1
+                const t_delta_x  = Math.abs(direction.x) > eps ? Math.abs(1 / direction.x) : Number.MAX_VALUE
+                const t_delta_y  = Math.abs(direction.y) > eps ? Math.abs(1 / direction.y) : Number.MAX_VALUE
+                const t_delta_z  = Math.abs(direction.z) > eps ? Math.abs(1 / direction.z) : Number.MAX_VALUE
+                let distance = 0
+                let x = Math.floor(origin.x)
+                let y = Math.floor(origin.y)
+                let z = Math.floor(origin.z)
+                let t_max_x = Math.abs(direction.x) > eps ? t_delta_x * (step_x > 0 ? 1 - (origin.x - x) : origin.x - x) : Number.MAX_VALUE
+                let t_max_y = Math.abs(direction.y) > eps ? t_delta_y * (step_y > 0 ? 1 - (origin.y - y) : origin.y - y) : Number.MAX_VALUE
+                let t_max_z = Math.abs(direction.z) > eps ? t_delta_z * (step_z > 0 ? 1 - (origin.z - z) : origin.z - z) : Number.MAX_VALUE
+                const _block_vec = new THREE.Vector3()
+                while(distance < pickat_distance) {
+                    // Проверяем, есть ли блок на текущей позиции
+                    _block_vec.set(x, y, z).floor()
+                    const block = world.getBlock(_block_vec.x, _block_vec.y, _block_vec.z)
+                    if((block?.is_solid || block?.receive_ao || (any_block && block?.id != 0)) && (block?.id != blocks_palette.water.id)) {
+                        // вычисляем текущую точку на луче
+                        item.point = direction.clone().multiplyScalar(distance).add(origin).round(4)
+                        item.side = side.multiplyScalar(-1)
+                        item.block_pos = _block_vec
+                        item.block = block // this.world.getBlock(tblock.pos)
+                        item.direction = direction
+                        yield item
+                    }
+                    if (t_max_x < t_max_y) {
+                        if (t_max_x < t_max_z) {
+                            side.set(step_x, 0, 0)
+                            x += step_x
+                            distance = t_max_x
+                            t_max_x += t_delta_x
+                        } else {
+                            side.set(0, 0, step_z)
+                            z += step_z
+                            distance = t_max_z
+                            t_max_z += t_delta_z
+                        }
+                    } else {
+                        if (t_max_y < t_max_z) {
+                            side.set(0, step_y, 0)
+                            y += step_y
+                            distance = t_max_y
+                            t_max_y += t_delta_y
+                        } else {
+                            side.set(0, 0, step_z)
+                            z += step_z
+                            distance = t_max_z
+                            t_max_z += t_delta_z
+                        }
+                    }
+                }
+                return null
+            }
+
+            breakBlock() {
+                const direction = new THREE.Vector3()
+                camera.getWorldDirection(direction)
+                const origin = camera.position.clone()
+                origin.y += player_height
+                const result = this.traceRay(origin, direction, true)
+                if(result.hit) {
+                    let p = performance.now()
+                    const pos = result.block_pos
+                    world.setBlock(pos.x, pos.y, pos.z, blocks_palette.air)
+                    world.updateNeibChunks(pos)
+                }
+            }
+
+            placeBlock() {
+                const direction = new THREE.Vector3()
+                camera.getWorldDirection(direction)
+                const origin = camera.position.clone()
+                origin.y += player_height
+                const result = this.traceRay(origin, direction)
+                if(result.hit) {
+                    let p = performance.now()
+                    const pos = result.block_pos.clone().add(result.side)
+                    world.setBlock(pos.x, pos.y, pos.z, this.inventory.current_block)
+                    world.updateNeibChunks(pos)
+                }
+            }
+
+            cloneBlock() {
+                const direction = new THREE.Vector3()
+                camera.getWorldDirection(direction)
+                const origin = camera.position.clone()
+                origin.y += player_height
+                const result = this.traceRay(origin, direction, true)
+                if(result.hit) {
+                    this.inventory.current_block = result.block
                 }
             }
 
@@ -259,16 +376,17 @@
         }
 
         class World {
+            /** @type {Chunk} */
+            chunks = new VectorCollector()
 
             constructor(chunk_size, world_size_in_chunks) {
                 this.chunk_size = chunk_size
-                this.world_size_in_chunks = world_size_in_chunks
+                /*this.world_size_in_chunks = world_size_in_chunks
                 this.world_size = {
                     x: this.world_size_in_chunks.x * this.chunk_size.x,
                     y: this.world_size_in_chunks.y * this.chunk_size.y,
                     z: this.world_size_in_chunks.z * this.chunk_size.z
-                }
-                this.chunks = new VectorCollector()
+                }*/
             }
 
             getMemoryUsage() {
@@ -297,6 +415,42 @@
                 const chunk_addr = this.getChunkAddr(x, y, z)
                 const chunk = this.getChunk(chunk_addr)
                 return chunk ? chunk.getBlockID(x - chunk.coord.x, y - chunk.coord.y, z - chunk.coord.z) : 0
+            }
+
+            setBlock(x, y, z, block) {
+                const chunk_addr = this.getChunkAddr(x, y, z)
+                let chunk = this.getChunk(chunk_addr)
+                if(chunk) {
+                    chunk.setBlock(x - chunk.coord.x, y - chunk.coord.y, z - chunk.coord.z, block)
+                    for(const [key, mesh] of Object.entries(chunk.meshes)) {
+                        mesh?.dispose()
+                        chunk.meshes[key] = null
+                    }
+                    chunk.makeVertices()
+                }
+            }
+
+            updateNeibChunks(block_pos) {
+                const size = this.chunk_size
+                const x = ((block_pos.x) % size.x + size.x) % size.x
+                const y = ((block_pos.y) % size.y + size.y) % size.y
+                const z = ((block_pos.z) % size.z + size.z) % size.z
+                const upd_chunks = []
+                const chunk_addr = this.getChunkAddr(block_pos.x, block_pos.y, block_pos.z)
+                const chunk = this.getChunk(chunk_addr)
+                if(chunk) {
+                    if(x == 0 && chunk.neighbours_chunks.nx) upd_chunks.push(chunk.neighbours_chunks.nx)
+                    if(x == size.x - 1 && chunk.neighbours_chunks.px) upd_chunks.push(chunk.neighbours_chunks.px)
+                    if(z == 0 && chunk.neighbours_chunks.nz) upd_chunks.push(chunk.neighbours_chunks.nz)
+                    if(z == size.z - 1 && chunk.neighbours_chunks.pz) upd_chunks.push(chunk.neighbours_chunks.pz)
+                    for(const item of upd_chunks) {
+                        for(const [key, mesh] of Object.entries(item.meshes)) {
+                            mesh?.dispose()
+                            item.meshes[key] = null
+                        }
+                        item.makeVertices()
+                    }
+                }
             }
 
         }
@@ -332,7 +486,6 @@
 
             updateMesh() {
                 const geometry = this.mesh.geometry
-                const vpp = 3 // vertices per polygon
                 const cnt = this.used_polygons * vpp
                 geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.vertices.slice(0, cnt * this.vertex_size), this.vertex_size))
                 geometry.setAttribute('uv', new THREE.Float32BufferAttribute(this.uvs.slice(0, cnt * this.uvs_size), this.uvs_size))
@@ -346,8 +499,9 @@
             // 
             addPlant(x, y, z, block) {
                 const face = block.faces[0]
-                x += Math.random() * 0.2 - 0.1
-                z += Math.random() * 0.2 - 0.1
+                const random = pseudoRandom(x * 256 + z)
+                x += random() * 0.2 - 0.1
+                z += random() * 0.2 - 0.1
                 for(let i = 0; i < planting_offsets.length; i++) {
                     this.addFace(x, y, z, 0, face, planting_offsets[i])
                 }
@@ -358,8 +512,7 @@
                 for (let i = 0; i < 6; i++) {
                     if (neighbours[i]) continue // If neighbour solid block exists, skip face
                     const face = block.faces[i]
-                    if(!face) continue
-                    this.addFace(x, y, z, i, face, face_offsets[i])
+                    if(face) this.addFace(x, y, z, i, face, face_offsets[i])
                 }
             }
 
@@ -368,7 +521,6 @@
                 this._resizeBuffers(2)
 
                 const hs  = 0.5
-                const vpp = 3 // vertices per polygon
                 const uv  = face.texture?.uv ?? empty_face
                 const { chunk, colors, flags, uvs, vertices } = this
                 const { vertices: face_vertices, uv: face_uv } = face_offsets
@@ -415,8 +567,6 @@
 
                 const polygons = this.reserved_polygons = Math.floor((this.reserved_polygons + 1000) * this.resize_factor)
                 const total_count = polygons * (this.vertex_size + this.uvs_size + this.color_size + this.flag_size)
-                const vpp = 3 // vertices per polygon
-
                 const new_buffer = this.buffer = new ArrayBuffer(total_count * Float32Array.BYTES_PER_ELEMENT * vpp)
                 const new_vertices = new Float32Array(new_buffer, 0, polygons * this.vertex_size * vpp)
                 const new_uvs = new Float32Array(new_buffer, new_vertices.byteLength, polygons * this.uvs_size * vpp)
@@ -515,7 +665,6 @@
                 z = Math.floor(z)
                 if(!this.isInBounds(x, y, z)) return
                 const index = this.getIndex(x, y, z)
-                if(!block?.id) debugger
                 this.blocks[index] = block.id
             }
 
@@ -893,6 +1042,7 @@
         ]
 
         const ao_indexes        = [0, 1, 2, 0, 2, 3]
+        const vpp               = 3 // vertices per polygon
         const bob_зarams        = { time: 0, frequency: 8, amplitudeX: 0.05, amplitudeY: 0.1, amplitude: 0.1 }
         const seed              = 'seed' 
         const player_height     = 1.8
@@ -960,6 +1110,12 @@
             // on mouse wheel
             document.addEventListener('wheel', (event) => {
                 speed_mul *= event.deltaY < 0 ? 1.1 : 0.9
+            })
+
+            document.addEventListener('mousedown', (event) => {
+                event.button === 0 && player_controller.breakBlock()
+                event.button === 1 && player_controller.cloneBlock()
+                event.button === 2 && player_controller.placeBlock()
             })
 
             window.addEventListener('resize', () => {
@@ -1381,8 +1537,7 @@
         }
 
         function chunkAddrIsFarAway(center_addr, addr) {
-            const dist = (addr.x - center_addr.x) ** 2 + (addr.z - center_addr.z) ** 2
-            return dist > render_distance ** 2
+            return ((addr.x - center_addr.x) ** 2 + (addr.z - center_addr.z) ** 2) > render_distance ** 2
         }
 
         function chunkWorks() {
@@ -1519,12 +1674,9 @@
             } else {
 
                 player_controller.update(elapsed)
-
-                // Update camera position
                 const player_pos = player_controller.position
                 const camera_pos = applyBobView(player_pos, elapsed)
                 controls.getObject().position.copy(camera_pos)
-
                 updateCoordinates(player_pos.x, player_pos.y, player_pos.z) // Update coordinates panel
 
             }
@@ -1569,7 +1721,7 @@
                 doubleside: createShaderMaterial(texture, { side: THREE.DoubleSide }),
             }
 
-            console.log('Map:', world_size.x * chunk_size.x, 'x', world_size.z * chunk_size.z)
+            console.log('Map:', render_distance * chunk_size.x, 'x', render_distance * chunk_size.z)
 
             stats = new Stats()
             stats.showPanel(0) // 0: FPS, 1: MS, 2: MB
