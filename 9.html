@@ -381,11 +381,6 @@
                 return (out || _ca).set(Math.floor(x / this.chunk_size.x), 0, Math.floor(z / this.chunk_size.z))
             }
 
-            /** @type Chunk */
-            getChunk(addr) {
-                return getChunk(addr)
-            }
-
             getBlock(x, y, z) {
                 const chunk_addr = this.getChunkAddr(x, y, z)
                 const chunk = getChunk(chunk_addr)
@@ -394,13 +389,13 @@
 
             getBlockID(x, y, z) {
                 const chunk_addr = this.getChunkAddr(x, y, z)
-                const chunk = this.getChunk(chunk_addr)
+                const chunk = getChunk(chunk_addr)
                 return chunk ? chunk.getBlockID(x - chunk.coord.x, y - chunk.coord.y, z - chunk.coord.z) : 0
             }
 
             setBlock(x, y, z, block) {
                 const chunk_addr = this.getChunkAddr(x, y, z)
-                let /** @type Chunk */ chunk = this.getChunk(chunk_addr)
+                let /** @type Chunk */ chunk = getChunk(chunk_addr)
                 if(chunk) {
                     chunk.setBlock(x - chunk.coord.x, y - chunk.coord.y, z - chunk.coord.z, block)
                     for(const [key, mesh] of Object.entries(chunk.meshes)) {
@@ -424,7 +419,7 @@
                 const x = ((block_pos.x % chunk_size.x) + chunk_size.x) % chunk_size.x
                 const z = ((block_pos.z % chunk_size.z) + chunk_size.z) % chunk_size.z
                 const chunk_addr = this.getChunkAddr(block_pos.x, block_pos.y, block_pos.z)
-                const chunk = this.getChunk(chunk_addr)
+                const chunk = getChunk(chunk_addr)
                 if(chunk) {
                     if(x == 0) this.remakeVertices(getChunk(_un_vec.set(chunk_addr.x - 1, 0, chunk_addr.z)))
                     if(x == chunk_size.x - 1) this.remakeVertices(getChunk(_un_vec.set(chunk_addr.x + 1, 0, chunk_addr.z)))
@@ -466,12 +461,14 @@
 
             dispose() {
                 this.used_polygons = 0
+                this.quads = 0
                 scene.remove(this.mesh)
-                if(chunks_reusing) {
-                    this.updateMesh()
-                } else {
-                    this.mesh.geometry.dispose()
-                    this.mesh.material.dispose()
+                this.mesh.geometry.dispose()
+                this.mesh.geometry = new THREE.BufferGeometry()
+                this.reserved_polygons = 0
+                this.buffer = new ArrayBuffer(0)
+                for (const attr of this.attributes) {
+                    attr.array = null
                 }
             }
 
@@ -498,13 +495,17 @@
                 const cnt = this.used_polygons * vpp
                 const { attributes } = this
                 for(const { array, name, size } of attributes) {
+                    if(!array) {
+                        geometry.deleteAttribute(name)
+                        continue
+                    }
                     const new_size = cnt * size
                     const attribute = geometry.getAttribute(name)
                     if(!attribute || attribute.array.length < new_size) {
                         stata.new_array++
                         geometry.setAttribute(name, new THREE.Float32BufferAttribute(array.slice(0, new_size), size))
                     } else {
-                        attribute.array.set(array.slice(0, new_size))
+                        // attribute.array.set(array.slice(0, new_size))
                         attribute.needsUpdate = true
                     }
                 }
@@ -587,13 +588,10 @@
             quads = 0
             dirty = false
             neighbours_mask = 0 // bit mask (1:x, 2:-x, 4:z, 8:-z)
-            neighbours_chunks = {
-                px: null,
-                nx: null,
-                pz: null,
-                nz: null,
-            }
 
+            /**
+             * @type {[key: string]: CubesMeshBuilder}
+             */
             meshes = {
                 regular: null,
                 doubleside: null,
@@ -614,13 +612,13 @@
                 const { size } = this
                 this.addr = addr.clone()
                 this.coord = addr.clone().multiply(size)
-                this.dirty = false
                 for(const mesh of Object.values(this.meshes)) {
                     if(mesh) {
                         scene.add(mesh.mesh)
                         mesh.updateMesh()
                     }
                 }
+                this.dirty = false
             }
 
             getMemoryUsage() {
@@ -670,12 +668,6 @@
                 } else {
                     this.neighbours_mask &= ~mask
                 }
-                // switch(mask) {
-                //     case 1: this.neighbours_chunks.px = chunk; break
-                //     case 2: this.neighbours_chunks.nx = chunk; break
-                //     case 4: this.neighbours_chunks.pz = chunk; break
-                //     case 8: this.neighbours_chunks.nz = chunk; break
-                // }
             }
 
             updateNeighbours() {
@@ -684,10 +676,10 @@
                 const chunk_nx = getChunk(_un_vec.set(addr.x - 1, addr.y, addr.z))
                 const chunk_pz = getChunk(_un_vec.set(addr.x, addr.y, addr.z + 1))
                 const chunk_nz = getChunk(_un_vec.set(addr.x, addr.y, addr.z - 1))
-                if(chunk_px) { this.setNeighbour(1, chunk_px); chunk_px.setNeighbour(2, this) }
-                if(chunk_nx) { this.setNeighbour(2, chunk_nx); chunk_nx.setNeighbour(1, this) }
-                if(chunk_pz) { this.setNeighbour(4, chunk_pz); chunk_pz.setNeighbour(8, this) }
-                if(chunk_nz) { this.setNeighbour(8, chunk_nz); chunk_nz.setNeighbour(4, this) }
+                if(chunk_px && !chunk_px.dirty) { this.setNeighbour(1, chunk_px); chunk_px.setNeighbour(2, this) }
+                if(chunk_nx && !chunk_nx.dirty) { this.setNeighbour(2, chunk_nx); chunk_nx.setNeighbour(1, this) }
+                if(chunk_pz && !chunk_pz.dirty) { this.setNeighbour(4, chunk_pz); chunk_pz.setNeighbour(8, this) }
+                if(chunk_nz && !chunk_nz.dirty) { this.setNeighbour(8, chunk_nz); chunk_nz.setNeighbour(4, this) }
             }
 
             generate() {
@@ -807,19 +799,8 @@
                     } else if(this.isInBounds(nx, ny, nz)) {
                         block_id = this.blocks[this.getIndex(nx, ny, nz)]
                     } else {
-                        const neighbours_chunks = this.neighbours_chunks
-                        // let chunk = null
-                        // if(nx < 0) {
-                        //     chunk = neighbours_chunks.nx
-                        // } else if(nx >= size.x) {
-                        //     chunk = neighbours_chunks.px
-                        // } else if(nz < 0) {
-                        //     chunk = neighbours_chunks.nz
-                        // } else if(nz >= size.z) {
-                        //     chunk = neighbours_chunks.pz
-                        // }
                         const chunk_addr = world.getChunkAddr(nx + coord.x, ny + coord.y, nz + coord.z)
-                        const chunk = world.getChunk(chunk_addr)
+                        const chunk = getChunk(chunk_addr)
                         if(chunk) {
                             const bx = ((nx + chunk.coord.x) % size.x + size.x) % size.x
                             const by = ((ny + chunk.coord.y) % size.y + size.y) % size.y
@@ -849,11 +830,6 @@
 
             makeVertices() {
                 const { blocks, size } = this
-                const neighbours_chunks = this.neighbours_chunks
-
-                for(const [key, mesh] of Object.entries(this.meshes)) {
-                    mesh?.dispose()
-                }
 
                 let { doubleside, regular, transparent } = this.meshes
                 for(let i = 0; i < blocks.length; i++) {
@@ -961,18 +937,7 @@
                     mesh?.dispose()
                 }
                 this.neighbours_mask = 0
-                const neighbours_chunks = this.neighbours_chunks
-                neighbours_chunks.px?.setNeighbour(2, null)
-                neighbours_chunks.nx?.setNeighbour(1, null)
-                neighbours_chunks.pz?.setNeighbour(8, null)
-                neighbours_chunks.nz?.setNeighbour(4, null)
-                neighbours_chunks.px = null
-                neighbours_chunks.nx = null
-                neighbours_chunks.pz = null
-                neighbours_chunks.nz = null
-                if(chunks_reusing) {
-                    this.blocks.fill(0)
-                }
+                this.blocks.fill(0)
             }
 
         }
@@ -1170,10 +1135,8 @@
         const water_level       = 64
         const tree_chance       = 64
         const player_chunk_o    = new THREE.Vector3()
-        const chunks_reusing    = false // true
 
         globalThis.world = world
-
         globalThis.direction = direction
 
         let frame = 0
@@ -1687,12 +1650,8 @@
 
         function generateChunk(addr) {
             let /** @type {Chunk} */ chunk = getChunk(addr, true)
-            if(chunk && !chunks_reusing) {
-                chunk.dispose()
-                chunk = null
-            }
             chunk ||= new Chunk(world, chunk_size, seed)
-            // chunk.dispose()
+            chunk.dispose()
             chunk.init(addr)
             chunk.generate()
             return chunk
