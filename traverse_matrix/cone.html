@@ -1,0 +1,152 @@
+
+<style>
+    #form {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        margin: auto;
+    }
+    #values {
+        margin: .5em;
+    }
+    #canvas1 {
+        border: 1px solid #d3d3d3;
+        background-color: #eee;
+        /* position: absolute; */
+        margin: auto;
+        left: 0;
+        right: 0;
+    }
+</style>
+
+<div id="form">
+    <input type=range min=0 max=17 value=8 oninput="an1(this.value, tilt, fov, this.value, pos_z)">
+    <input type=range min=0 max=17 value=8 oninput="an1(this.value, tilt, fov, pos_x, this.value)">
+    <div>
+        <input type=range min=0 max=360 value=0 oninput="an1(this.value, tilt, fov, pos_x, pos_z)">
+        <input type=range min=0 max=90 value=0 oninput="an1(angle, this.value, fov, pos_x, pos_z)">
+        <input type=range min=10 max=180 value=90 oninput="an1(angle, tilt, this.value, pos_x, pos_z)">
+    </div>
+    <div id="values"></div>
+    <canvas id="canvas1" width="640" height="640"></canvas>
+    <p><a target="_blank" href="https://codepen.io/sciner/pen/LEPYdqN">https://codepen.io/sciner/pen/LEPYdqN</a></p>
+</div>
+
+<script>
+
+    var canvas = document.getElementById('canvas1')
+    const render_distance = 8
+    const side = render_distance * 2 + 1
+    const s = 512 / side
+    canvas.width = 512
+    canvas.height = 512
+    let angle = 0, tilt = 0, fov = 90
+    let pos_x = 8
+    let pos_z = 8
+
+    function an1(v1, v2, v3, v4, v5) {
+        console.log(v4, v5)
+        angle = v1
+        tilt = v2
+        fov = v3
+        pos_x = v4
+        pos_z = v5
+        draw()
+    }
+
+    function draw() {
+        document.getElementById('values').innerText = `angle: ${angle}, tilt: ${tilt}, fov: ${fov}`
+        const moves = traverseCone(pos_x, pos_z, side, angle, tilt, fov)
+        if (canvas.getContext) {
+            var ctx = canvas.getContext('2d');
+            let i = 0
+            ctx.font = "12px serif";
+            ctx.textBaseline = 'top'
+            ctx.fillStyle = `#fff`;
+            ctx.fillRect(0, 0, 512, 512);
+            // ctx.fillText(moves.length, 64, 64);
+            for(const [x, y] of moves) {
+                let col = Math.floor((1 - i++ / moves.length) * 256)
+                ctx.fillStyle = `rgba(${col}, ${col}, ${col})`;
+                ctx.fillRect(x*s, y*s, s, s);
+                ctx.fillStyle = `rgba(255, 0, 0)`;
+                ctx.fillText(i,x*s+s*0.33, y*s+s*.33);
+            }
+
+        }
+    }
+
+    draw()
+
+    function traverseCone(center_x, center_y, size, angle_deg, tilt_deg, fov_deg) {
+        const cx = center_x
+        const cy = center_y
+        center_x = Math.floor(size / 2)
+        center_y = Math.floor(size / 2)
+        // Преобразование градусов в радианы
+        const angle_rad = angle_deg * Math.PI / 180
+        const tilt_rad = tilt_deg * Math.PI / 180
+        const half_fov_rad = (fov_deg / 2) * Math.PI / 180
+        // Направляющий вектор взгляда
+        const dir_x = Math.cos(tilt_rad) * Math.cos(angle_rad)
+        const dir_y = Math.cos(tilt_rad) * Math.sin(angle_rad)
+        const dir_z = -Math.sin(tilt_rad); // Отрицательный, так как ось Z направлена вверх
+        // Высота наблюдателя над плоскостью
+        const h = 1 // Можно взять любое положительное число
+        const cells = []
+        for (let x = 0; x < size; x++) {
+            for (let y = 0; y < size; y++) {
+                // Вектор от наблюдателя к клетке
+                const vec_x = x - center_x
+                const vec_y = y - center_y
+                const vec_z = -h
+                // Длина вектора к клетке
+                const vec_length = Math.sqrt(vec_x * vec_x + vec_y * vec_y + vec_z * vec_z)
+                // Нормализуем вектор к клетке
+                const norm_vec_x = vec_x / vec_length
+                const norm_vec_y = vec_y / vec_length
+                const norm_vec_z = vec_z / vec_length
+                // Косинус угла между направляющим вектором и вектором к клетке
+                const cos_theta = dir_x * norm_vec_x + dir_y * norm_vec_y + dir_z * norm_vec_z
+                // Угол между векторами
+                const theta = Math.acos(Math.min(Math.max(cos_theta, -1), 1)) // Ограничиваем cos_theta в диапазоне [-1, 1]
+                // Расстояние в плоскости XY
+                const distance_xy = Math.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+                // Проверяем, находится ли клетка внутри конуса обзора
+                const in_fov = theta <= half_fov_rad
+                // Вычисляем приоритет
+                const priority = distance_xy * (1 - cos_theta)
+                // if(distance_xy <= render_distance) {
+                    cells.push({
+                        x: x,
+                        y: y,
+                        flat_index: x + y * size,
+                        priority: priority,
+                        in_fov: in_fov,
+                        distance: distance_xy
+                    })
+                // }
+            }
+        }
+        // Сортируем клетки по приоритету
+        cells.sort(function(a, b) {
+            if (a.in_fov && b.in_fov) {
+                return a.priority - b.priority; // Меньший приоритет имеет больший приоритет в обходе
+            } else if (a.in_fov) {
+                return -1; // Клетки внутри FOV идут раньше
+            } else if (b.in_fov) {
+                return 1
+            } else {
+                return a.priority - b.priority
+            }
+        })
+        for(let i = 0; i < cells.length; i++) {
+            // cells[i].x = (((cells[i].x + cx) % size) + size) % size
+            // cells[i].y = (((cells[i].y + cy) % size) + size) % size
+        }
+        // Извлекаем координаты из отсортированного списка
+        const coords = cells.map(cell => [cell.x, cell.y])
+        return coords
+    }
+
+</script>

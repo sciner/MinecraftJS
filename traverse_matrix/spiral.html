@@ -1,0 +1,93 @@
+
+<style>
+    #canvas1 {
+    border: 1px solid #d3d3d3;
+    position: absolute;
+    margin: auto;
+    left: 0;
+    right: 0;
+    }
+</style>
+
+<canvas id="canvas1" width="640" height="640"></canvas>
+
+<script>
+
+    const moves = traverseSquareMatrix(4, 4, 17)
+
+    function draw() {
+    var canvas = document.getElementById('canvas1')
+    canvas.width = 448
+    canvas.height = 448
+    if (canvas.getContext) {
+        var ctx = canvas.getContext('2d');
+        const s = 448/17
+        let i = 0
+        ctx.font = "12px serif";
+        ctx.textBaseline = 'top'
+        ctx.fillText(moves.length, 500, 50);
+        for(const [x, y] of moves) {
+            let col = Math.round((1 - i++ / moves.length) * 255)
+            ctx.fillStyle = `rgba(${col}, ${col}, ${col})`;
+            ctx.fillRect(x*s, y*s, s, s);
+            ctx.fillStyle = `rgba(255, 0, 0)`;
+            ctx.fillText(i,x*s+s*0.33, y*s+s*.33);
+        }
+
+    }
+    }
+
+    draw()
+
+    function traverseSquareMatrix(center_x, center_y, size) {
+        const cx = center_x
+        const cy = center_y
+        center_x = Math.floor(size / 2)
+        center_y = Math.floor(size / 2)
+        const result = []
+        const directions = [
+            [0, 1], // right
+            [1, 0], // down
+            [0, -1], // left
+            [-1, 0] // up
+        ]
+        const visited = Array.from({ length: size }, () => Array(size).fill(false))
+        let x = center_x
+        let y = center_y
+        let step = 1
+        result.push([x, y])
+        visited[x][y] = true // Помечаем начальную ячейку как посещённую
+        while (result.length < size * size) {
+            for (let d = 0; d < 4; d++) {
+                for (let i = 0; i < step; i++) {
+                    x = (x + directions[d][0] + size) % size
+                    y = (y + directions[d][1] + size) % size
+                    if (!visited[x][y]) {
+                        visited[x][y] = true
+                        result.push([x, y])
+                    }
+                }
+                if (d % 2 === 1) step++
+            }
+        }
+        let resp = []
+        result.filter((arr, i) => {
+            let [x, y] = arr
+            const sz2 = size / 2
+            x = (((x - center_x) % size)) % size
+            y = (((y - center_y) % size)) % size
+            let dist = x ** 2 + y ** 2
+            let ok = dist < (sz2 ** 2)
+            arr = [x + cx, y + cy]
+            if(ok) {
+                resp.push([
+                    ((x + cx) + size) % size,
+                    ((y + cy) + size) % size,
+                ])
+            }
+            return ok
+        })
+        return resp
+    }
+
+</script>
