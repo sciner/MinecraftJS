@@ -41,7 +41,6 @@
             chunk_inites: 0,
             meshes: 0,
         }
-
         class PlayerController {
             inventory = {
                 current_block: blocks_palette.stone,
@@ -49,141 +48,141 @@
 
             constructor(world, gravity = 9.8, inertia = 0.99, start_position) {
                 this.world = world
-                this.gravity = gravity
-                this.inertia = inertia
+                // Use Minecraft-like parameters internally instead of given gravity/inertia
+                this.gravity = 20 // Strong gravity for fast falling, similar to MC feeling
+                this.inertia = inertia // Used for slight horizontal friction if needed
                 this.position = new THREE.Vector3(start_position.x, start_position.y, start_position.z)
-                this.velocity = { x: 0, y: 0, z: 0 }
+                this.velocity = new THREE.Vector3(0, 0, 0)
                 this.isGrounded = false
-                this.jumpForce = 5
+                this.jumpForce = 7 // Enough to jump about 1.25 blocks high with g=20
+                this.mcMoveSpeed = 4.317 // Walking speed close to Minecraft (~4.317 m/s)
+                this.margin = 0.2
+                this.mcWaterSpeed = 2.2 // Slower horizontal speed in water
+                this.inWater = false
             }
 
             update(elapsed_ms) {
                 const elapsed_seconds = elapsed_ms / 1000
-                const margin = 0.2 // min dist to block
-                const block_legs = this.world.getBlock(this.position.x, this.position.y + 0.01, this.position.z)
-                const block_below = this.world.getBlock(this.position.x, this.position.y - 0.5, this.position.z) // check block under player
-                const in_water = block_legs?.id == 4
 
-                this.block_below = block_below
-                this.isGrounded = !block_below?.passable
+                const block_legs = this.world.getBlock(this.position.x, this.position.y, this.position.z)
+                const block_below = this.world.getBlock(this.position.x, this.position.y - 0.5, this.position.z)
+                this.isGrounded = block_below && !block_below.passable
+                this.inWater = (block_legs && block_legs.id === blocks_palette.water.id)
 
-                // apply gravity
-                if (!this.isGrounded || in_water) {
-                    if(in_water) {
-                        if (move_up) {
-                            this.velocity.y += this.gravity * elapsed_seconds * 0.75 // Increase buoyancy
-                        } else {
-                            this.velocity.y -= this.gravity * elapsed_seconds * 0.1 // Decrease buoyancy
-                        }
-                        const max_water_velocity = 1.5
-                        this.velocity.y = Math.max(-max_water_velocity, Math.min(max_water_velocity, this.velocity.y))
-                        const water_drag = 0.85 // water drag
-                        this.velocity.x *= water_drag
-                        this.velocity.z *= water_drag
+                // Water behavior: if in water, pressing jump moves up slowly, otherwise you sink slowly
+                if(this.inWater) {
+                    // In water, gravity effect is weaker, player can slowly move upward if jump is pressed
+                    if(move_up) {
+                        // Pressing jump: move upward, but weaker than on land
+                        this.velocity.y += this.gravity * elapsed_seconds * 0.4
                     } else {
-                        this.velocity.y -= this.gravity * elapsed_seconds * 1.5
+                        // Not pressing jump: sink slowly
+                        this.velocity.y -= this.gravity * elapsed_seconds * 0.2
+                    }
+
+                    // Limit vertical velocity in water
+                    const max_water_vel = 1.5
+                    if(this.velocity.y > max_water_vel) this.velocity.y = max_water_vel
+                    if(this.velocity.y < -max_water_vel) this.velocity.y = -max_water_vel
+
+                    // Apply "drag" in water to horizontal movement
+                    this.velocity.x *= 0.8
+                    this.velocity.z *= 0.8
+                } else {
+                    // On land: normal gravity
+                    if (!this.isGrounded) {
+                        this.velocity.y -= this.gravity * elapsed_seconds
+                    } else {
+                        if(this.velocity.y < 0) {
+                            this.velocity.y = 0
+                        }
                     }
                 }
 
-                // Calculate moevements
-                let moveVector = { x: 0, z: 0 }
-                if (move_forward) {
-                    const dir = new THREE.Vector3()
-                    camera.getWorldDirection(dir)
-                    moveVector.x += dir.x
-                    moveVector.z += dir.z
-                }
-                if (move_backward) {
-                    const dir = new THREE.Vector3()
-                    camera.getWorldDirection(dir)
-                    moveVector.x -= dir.x
-                    moveVector.z -= dir.z
-                }
-                if (move_left) {
-                    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camera.getWorldDirection(new THREE.Vector3())).normalize()
-                    moveVector.x += right.x
-                    moveVector.z += right.z
-                }
-                if (move_right) {
-                    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camera.getWorldDirection(new THREE.Vector3())).normalize()
-                    moveVector.x -= right.x
-                    moveVector.z -= right.z
-                }
+                // Determine forward and right directions based on camera orientation
+                const forward = new THREE.Vector3()
+                camera.getWorldDirection(forward)
+                forward.y = 0
+                forward.normalize()
 
-                // Normalize movement to prevent acceleration when moving diagonally
-                const length = Math.sqrt(moveVector.x ** 2 + moveVector.z ** 2)
-                if (length > 0) {
-                    moveVector.x /= length
-                    moveVector.z /= length
+                const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), forward).normalize()
+
+                let moveDir = new THREE.Vector3()
+                if (move_forward) moveDir.add(forward)
+                if (move_backward) moveDir.sub(forward)
+                if (move_left) moveDir.add(right)
+                if (move_right) moveDir.sub(right)
+
+                // Use different speed in water or on land
+                const current_speed = this.inWater ? this.mcWaterSpeed : this.mcMoveSpeed
+
+                if (moveDir.length() > 0) {
+                    moveDir.normalize()
+                    this.velocity.x = moveDir.x * current_speed
+                    this.velocity.z = moveDir.z * current_speed
+                } else {
+                    // No input: apply friction-like damping
+                    // Approximate friction similar to MC by using a factor each frame
+                    const friction = Math.pow(0.8, elapsed_seconds * 20)
+                    this.velocity.x *= friction
+                    this.velocity.z *= friction
                 }
 
-                // Apply movement
-                const movement_speed = 30
-                this.velocity.x += moveVector.x * elapsed_seconds * movement_speed
-                this.velocity.z += moveVector.z * elapsed_seconds * movement_speed
+                const new_pos = this.position.clone().addScaledVector(this.velocity, elapsed_seconds)
 
-                // Apply inertia
-                const frame_inertia = 1 - (1 - this.inertia) * elapsed_ms / 16.67 // 16.67 ms — 1 frame time for 60 fps
-                this.velocity.x *= frame_inertia
-                this.velocity.z *= frame_inertia
-
-                // Calculate new position
-                let new_pos = new THREE.Vector3(
-                    this.position.x + this.velocity.x * elapsed_seconds,
-                    this.position.y + this.velocity.y * elapsed_seconds,
-                    this.position.z + this.velocity.z * elapsed_seconds
-                )
-
-                // Check collisions with blocks
+                // Check collision in X direction
                 const block_at_new_pos_x = this.world.getBlock(
-                    new_pos.x + Math.sign(this.velocity.x) * margin,
+                    new_pos.x + Math.sign(this.velocity.x) * this.margin,
                     this.position.y,
                     this.position.z
                 )
-
-                if (!block_at_new_pos_x?.passable) {
-                    // Block movement on X
+                if(!block_at_new_pos_x?.passable) {
                     this.velocity.x = 0
                     new_pos.x = this.position.x
                 }
 
+                // Check collision in Z direction
                 const block_at_new_pos_z = this.world.getBlock(
                     this.position.x,
                     this.position.y,
-                    new_pos.z + Math.sign(this.velocity.z) * margin
+                    new_pos.z + Math.sign(this.velocity.z) * this.margin
                 )
-
-                if (!block_at_new_pos_z?.passable) {
-                    // Block movement on Z
+                if(!block_at_new_pos_z?.passable) {
                     this.velocity.z = 0
+                    new_pos.z = this.position.x
                     new_pos.z = this.position.z
                 }
 
-                // Check collisions with blocks on Y
+                // Check collision in Y direction
                 const block_at_new_pos_y = this.world.getBlock(
                     this.position.x,
                     new_pos.y,
                     this.position.z
                 )
-
-                if (!block_at_new_pos_y?.passable) {
-                    if (this.velocity.y < 0) {
+                if(!block_at_new_pos_y?.passable) {
+                    if(this.velocity.y < 0) {
                         this.isGrounded = true
                     }
                     this.velocity.y = 0
                     new_pos.y = this.position.y
                 }
 
-                // Update position
-                return this.position = new_pos
+                this.position.copy(new_pos)
 
+                if(this.isGrounded && move_up) {
+                    // Клавиша пробела всё ещё зажата, вызываем jump()
+                    this.jump()
+                }
+                return this.position
             }
 
             jump() {
-                if (this.isGrounded) {
+                // Normal jump on land
+                if (this.isGrounded && !this.inWater) {
                     this.velocity.y = this.jumpForce
                     this.isGrounded = false
                 }
+                // In water, jump key (move_up) is handled in update()
             }
 
             traceRay(origin, dir, any_block = false) {
@@ -194,13 +193,10 @@
                 return { hit: false }
             }
 
-            /**
-             * Алгоритм DDA (Digital Differential Analyzer)
-             */
             *raycast(origin, dir, pickat_distance, any_block) {
                 const eps        = 1e-5
                 const item       = {point: null, direction: null, side: null, block: null}
-                const side       = new THREE.Vector3() // с какой стороны AABB упал луч
+                const side       = new THREE.Vector3()
                 const direction  = new THREE.Vector3().copy(dir).normalize()
                 const step_x     = direction.x > 0 ? 1 : -1
                 const step_y     = direction.y > 0 ? 1 : -1
@@ -216,16 +212,15 @@
                 let t_max_y = Math.abs(direction.y) > eps ? t_delta_y * (step_y > 0 ? 1 - (origin.y - y) : origin.y - y) : Number.MAX_VALUE
                 let t_max_z = Math.abs(direction.z) > eps ? t_delta_z * (step_z > 0 ? 1 - (origin.z - z) : origin.z - z) : Number.MAX_VALUE
                 const _block_vec = new THREE.Vector3()
+
                 while(distance < pickat_distance) {
-                    // Проверяем, есть ли блок на текущей позиции
                     _block_vec.set(x, y, z).floor()
-                    const block = world.getBlock(_block_vec.x, _block_vec.y, _block_vec.z)
+                    const block = this.world.getBlock(_block_vec.x, _block_vec.y, _block_vec.z)
                     if((block?.is_solid || block?.receive_ao || (any_block && block?.id != 0)) && (block?.id != blocks_palette.water.id)) {
-                        // вычисляем текущую точку на луче
                         item.point = direction.clone().multiplyScalar(distance).add(origin).round(4)
                         item.side = side.multiplyScalar(-1)
                         item.block_pos = _block_vec
-                        item.block = block // this.world.getBlock(tblock.pos)
+                        item.block = block
                         item.direction = direction
                         yield item
                     }
@@ -265,14 +260,13 @@
                 origin.y += player_height
                 const result = this.traceRay(origin, direction, true)
                 if(result.hit) {
-                    let p = performance.now()
                     const pos = result.block_pos
                     if(event.shiftKey) {
                         console.log(pos)
                         return
                     }
-                    world.setBlock(pos.x, pos.y, pos.z, blocks_palette.air)
-                    world.redrawNeibChunks(pos)
+                    this.world.setBlock(pos.x, pos.y, pos.z, blocks_palette.air)
+                    this.world.redrawNeibChunks(pos)
                 }
             }
 
@@ -283,10 +277,9 @@
                 origin.y += player_height
                 const result = this.traceRay(origin, direction)
                 if(result.hit) {
-                    let p = performance.now()
                     const pos = result.block_pos.clone().add(result.side)
-                    world.setBlock(pos.x, pos.y, pos.z, this.inventory.current_block)
-                    world.redrawNeibChunks(pos)
+                    this.world.setBlock(pos.x, pos.y, pos.z, this.inventory.current_block)
+                    this.world.redrawNeibChunks(pos)
                 }
             }
 
@@ -300,7 +293,6 @@
                     this.inventory.current_block = result.block
                 }
             }
-
         }
 
         class VectorCollector {
@@ -549,6 +541,10 @@
                 const coord            = chunk.coord
                 const [ attr_position, attr_uv, attr_color, attr_flag ] = this.attributes
 
+                const ox = coord.x
+                const oy = coord.y
+                const oz = coord.z
+
                 let used_polygons = this.used_polygons
                 let vi            = used_polygons * this.vertex_size * vpp
                 let ui            = used_polygons * this.uvs_size * vpp
@@ -558,9 +554,9 @@
                 if(!attr_position) debugger
 
                 for (let i = 0; i < vertices.length; i += 3) {
-                    attr_position.array[vi++] = coord.x + x + hs * vertices[i] + 0.5
-                    attr_position.array[vi++] = coord.y + y + hs * vertices[i + 1] + 0.5
-                    attr_position.array[vi++] = coord.z + z + hs * vertices[i + 2] + 0.5
+                    attr_position.array[vi++] = ox + x + hs * vertices[i] + 0.5
+                    attr_position.array[vi++] = oy + y + hs * vertices[i + 1] + 0.5
+                    attr_position.array[vi++] = oz + z + hs * vertices[i + 2] + 0.5
                     // Add UV, scaling them by u, v, u2, v2 values
                     attr_uv.array[ui++] = uv[(i / 3) * 2] === 0 ? face_uv[0] : face_uv[2]
                     attr_uv.array[ui++] = uv[(i / 3) * 2 + 1] === 0 ? face_uv[1] : face_uv[3]
@@ -1510,8 +1506,9 @@
                         // finalColor *= shadowFactor; // Apply shadow factor
 
                         // Apply fog
-                        float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
-                        vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
+                        // float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
+                        // vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
+                        vec3 foggedColor = finalColor;
 
                         float alpha = checkFlag(1) ? 0.75 : 1.0;
                         gl_FragColor = vec4(foggedColor, alpha);
@@ -1574,13 +1571,21 @@
 
         function getPlayerPosition() { return spectator_mode ? controls.getObject().position : player_controller.position }
 
-        function getChunk(chunk_addr, ignore_check_addr = false) {
+        const _chunk_matrix_addr = new THREE.Vector3()
+        function getChunkMatrixAddr(chunk_addr) {
+            // globalThis.asdasdas ??= 0
+            // if(globalThis.asdasdas++%1000==0)console.log(globalThis.asdasdas)
             const player_xyz = getPlayerPosition()
             const player_chunk = world.getChunkAddr(player_xyz.x, player_xyz.y, player_xyz.z, _ca_gcaddr)
             const player_matrix_x = ((player_chunk.x % matrix_side) + matrix_side) % matrix_side
             const player_matrix_z = ((player_chunk.z % matrix_side) + matrix_side) % matrix_side
             const x = (player_matrix_x + ((chunk_addr.x - player_chunk.x) % matrix_side) + matrix_side) % matrix_side
             const z = (player_matrix_z + ((chunk_addr.z - player_chunk.z) % matrix_side) + matrix_side) % matrix_side
+            return _chunk_matrix_addr.set(x, 0, z)
+        }
+
+        function getChunk(chunk_addr, ignore_check_addr = false) {
+            const { x, z } = getChunkMatrixAddr(chunk_addr)
             const chunk = matrix[z * matrix_side + x]
             if(chunk && (ignore_check_addr || chunk.addr.equals(chunk_addr))) {
                 return chunk
