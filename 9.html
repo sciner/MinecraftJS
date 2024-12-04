@@ -378,7 +378,11 @@
             }
 
             getChunkAddr(x, y, z, out) {
-                return (out || _ca).set(Math.floor(x / this.chunk_size.x), 0, Math.floor(z / this.chunk_size.z))
+                return (out || _ca).set(
+                    Math.floor(x / this.chunk_size.x),
+                    0,
+                    Math.floor(z / this.chunk_size.z)
+                )
             }
 
             getBlock(x, y, z) {
@@ -829,6 +833,7 @@
             }
 
             makeVertices() {
+
                 const { blocks, size } = this
 
                 let { doubleside, regular, transparent } = this.meshes
@@ -1505,10 +1510,8 @@
                         // finalColor *= shadowFactor; // Apply shadow factor
 
                         // Apply fog
-                        // float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
-                        // vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
-                        
-                        vec3 foggedColor = finalColor;
+                        float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
+                        vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
 
                         float alpha = checkFlag(1) ? 0.75 : 1.0;
                         gl_FragColor = vec4(foggedColor, alpha);
@@ -1824,8 +1827,14 @@
                     matrix[ti] = generateChunk(cell_chunk_addr)
                     if(--max_generates == 0) break
                 } else if(chunk.quads == 0 && chunk.neighbours_mask == 15) {
-                    chunk.makeVertices()
-                    if(--max_generates == 0) break
+                    const neib_nx = getChunk(cell_chunk_addr.clone().add({x: -1, y: 0, z: 0}))
+                    const neib_px = getChunk(cell_chunk_addr.clone().add({x: 1, y: 0, z: 0}))
+                    const neib_nz = getChunk(cell_chunk_addr.clone().add({x: 0, y: 0, z: -1}))
+                    const neib_pz = getChunk(cell_chunk_addr.clone().add({x: 0, y: 0, z: 1}))
+                    if(neib_nx && neib_px && neib_nz && neib_pz) {
+                        chunk.makeVertices()
+                        if(--max_generates == 0) break
+                    }
                 }
             }
         }
