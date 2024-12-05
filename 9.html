@@ -7,12 +7,12 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #87ceeb; }
         canvas { display: block; }
-        .f3-line { margin-bottom: .2em; text-shadow: 0 0 10px #333; }
+        .f3-line { user-select: none; pointer-events: none; margin-bottom: .2em; text-shadow: 0 0 10px #333; }
         .key { display: inline-block; border-radius: 4px; padding: .1em .5em; background-color:dimgrey; border: 2px solid #fff; }
-        #f3-box { position: absolute; top: 10px; right: 10px; color: white; font-size: 16px; font-family: monospace; }
-        #coords {white-space: pre-line; padding-top: 1em;}
+        #f3-box { user-select: none; pointer-events: none; position: absolute; top: 10px; right: 10px; color: white; font-size: 16px; font-family: monospace; }
+        #coords {white-space: pre-line; padding-top: 1em; text-shadow: 0 0 10px #333; }
         #loading { position: absolute; color: white; font-weight: bold; text-shadow: 0 0 10px #333; z-index: -1; font-family: 'Courier New', Courier, monospace; left: 50%; top: 50%; transform: translate(-50%, -50%);}
-        #crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; width: 2em; height: 2em; pointer-events: none; }
+        #crosshair { user-select: none; pointer-events: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; width: 2em; height: 2em; pointer-events: none; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.1/three.js" integrity="sha512-HCh7TuJvWZ35Ixo/afKeBRbAUtnqQWOrpw5Fs1bdWjWILg175hy9XRmuqG/vWyAqBKvUZStGMAsqKmYKqP91YQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r110/examples/js/controls/PointerLockControls.js"></script>
@@ -256,7 +256,7 @@
             breakBlock(event) {
                 const direction = new THREE.Vector3()
                 camera.getWorldDirection(direction)
-                const origin = camera.position.clone()
+                const origin = getPlayerPosition().clone()
                 origin.y += player_height
                 const result = this.traceRay(origin, direction, true)
                 if(result.hit) {
@@ -273,7 +273,7 @@
             placeBlock() {
                 const direction = new THREE.Vector3()
                 camera.getWorldDirection(direction)
-                const origin = camera.position.clone()
+                const origin = getPlayerPosition().clone()
                 origin.y += player_height
                 const result = this.traceRay(origin, direction)
                 if(result.hit) {
@@ -286,7 +286,7 @@
             cloneBlock() {
                 const direction = new THREE.Vector3()
                 camera.getWorldDirection(direction)
-                const origin = camera.position.clone()
+                const origin = getPlayerPosition().clone()
                 origin.y += player_height
                 const result = this.traceRay(origin, direction, true)
                 if(result.hit) {
@@ -506,7 +506,7 @@
                     }
                 }
                 geometry.computeVertexNormals()
-                geometry.computeBoundingBox()
+                // geometry.computeBoundingBox()
                 geometry.computeBoundingSphere()
             }
 
@@ -1365,9 +1365,12 @@
                         vec3 modifiedPosition = position;
                         if (checkFlag(1)) {
                             // water waves
-                            modifiedPosition.y -= 2./16.;
-                            modifiedPosition.y += sin(position.x * 2.0 + data.time * 2.) * 0.0625;
-                            modifiedPosition.y += cos(position.z * 2.0 + data.time * 2.) * 0.0625;
+                            const float PI = 3.14159265359;
+                            const float WAVE_NUMBER = 2.0 * PI / 4.0; // 2π / 2 метров
+                            const float AMPLITUDE = 0.03; // Мелкая амплитуда
+                            modifiedPosition.y -= 2.0 / 16.0;
+                            modifiedPosition.y += sin(position.x * WAVE_NUMBER + data.time * 2.0) * AMPLITUDE;
+                            modifiedPosition.y += cos(position.z * WAVE_NUMBER + data.time * 2.0) * AMPLITUDE;
                         } else if (checkFlag(16)) {
                             // leaves movements
                             modifiedPosition.x += sin(position.x * 2.0 + data.time * 2.) * 0.0625;
@@ -1513,9 +1516,9 @@
                         // finalColor *= shadowFactor; // Apply shadow factor
 
                         // Apply fog
-                        // float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
-                        // vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
-                        vec3 foggedColor = finalColor;
+                        float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
+                        vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
+                        // vec3 foggedColor = finalColor;
 
                         float alpha = checkFlag(1) ? 0.75 : 1.0;
                         gl_FragColor = vec4(foggedColor, alpha);
@@ -1599,6 +1602,13 @@
             }
         }
 
+        function localRound(num, n = 2) {
+            return num.toLocaleString(undefined, {
+                minimumFractionDigits: n,
+                maximumFractionDigits: n
+            })
+        }
+
         // Function to update coordinates
         function updateCoordinates(xyz) {
             const { x, y, z } = xyz
@@ -1608,7 +1618,7 @@
             }
             if(frame % 5 === 0) {
                 const chunk_coord = world.getChunkAddr(x, y, z)
-                coords_el.textContent = `${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}\n`+
+                coords_el.textContent = `${localRound(x, 1)}, ${localRound(y, 1)}, ${localRound(z, 1)}\n`+
                     `Chunk: ${chunk_coord.x}/${chunk_coord.y}/${chunk_coord.z}\n`+
                     `Speed: ${walk_speed_counter.speed.toFixed(2)} km/h\n`+
                     `Render distance: ${render_distance}`
@@ -1652,7 +1662,7 @@
         }
 
         function teleportRandomly() {
-            const range = 1000
+            const range = 2000000
             teleportTo(new THREE.Vector3(
                 Math.round(Math.random() * range - range / 2) + 0.5,
                 Math.round(100 + Math.random() * 16),
