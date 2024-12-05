@@ -13,6 +13,9 @@
         #coords {white-space: pre-line; padding-top: 1em; text-shadow: 0 0 10px #333; }
         #loading { position: absolute; color: white; font-weight: bold; text-shadow: 0 0 10px #333; z-index: -1; font-family: 'Courier New', Courier, monospace; left: 50%; top: 50%; transform: translate(-50%, -50%);}
         #crosshair { user-select: none; pointer-events: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; width: 2em; height: 2em; pointer-events: none; }
+        #inventory { pointer-events: none; user-select: none;  position: fixed; left: 50%; bottom: 2px; transform: translateX(-50%); background-color: #22222222; zoom: 4; }
+        #inventory-selector { position: absolute; width: 16px; height: 16px; border: 2px solid #8BC34A; left: -2px; top: -2px; }
+        .inventory_texture { image-rendering: pixelated; display: block; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.1/three.js" integrity="sha512-HCh7TuJvWZ35Ixo/afKeBRbAUtnqQWOrpw5Fs1bdWjWILg175hy9XRmuqG/vWyAqBKvUZStGMAsqKmYKqP91YQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r110/examples/js/controls/PointerLockControls.js"></script>
@@ -31,6 +34,10 @@
         <div id="coords"></div>
     </div>
 
+    <div id="inventory">
+        <div id="inventory-selector"></div>
+    </div>
+
     <script type="module">
         import Stats from 'https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js'
 
@@ -40,8 +47,18 @@
             chunks: 0,
             chunk_inites: 0,
             meshes: 0,
+            make_vertices: 0,
+            make_vertices_total_time: 0,
+            make_vertices_time_per_one: 0,
+            generated_chunks: 0,
+            generated_chunks_total_time: 0,
+            generated_chunks_time_per_one: 0,
         }
+
         class PlayerController {
+            player_chunk_addr = new THREE.Vector3()
+            player_matrix_x = 0
+            player_matrix_z = 0
             inventory = {
                 current_block: blocks_palette.stone,
             }
@@ -59,6 +76,23 @@
                 this.margin = 0.2
                 this.mcWaterSpeed = 2.2 // Slower horizontal speed in water
                 this.inWater = false
+            }
+
+            setPosition(xyz) {
+                this.position.copy(xyz)
+                this.refresh()
+            }
+
+            addPosition(xyz) {
+                this.position.add(xyz)
+                this.refresh()
+            }
+
+            refresh() {
+                const player_xyz = this.position
+                const player_chunk_addr = world.getChunkAddr(player_xyz.x, player_xyz.y, player_xyz.z, this.player_chunk_addr)
+                this.player_matrix_x = ((player_chunk_addr.x % matrix_side) + matrix_side) % matrix_side
+                this.player_matrix_z = ((player_chunk_addr.z % matrix_side) + matrix_side) % matrix_side
             }
 
             update(elapsed_ms) {
@@ -647,13 +681,15 @@
                 return this.blocks[index]
             }
 
-            setBlock(x, y, z, block) {
+            setBlock(x, y, z, block, no_replace = false) {
                 x = Math.floor(x)
                 y = Math.floor(y)
                 z = Math.floor(z)
                 if(!this.isInBounds(x, y, z)) return
                 const index = this.getIndex(x, y, z)
-                this.blocks[index] = block.id
+                if(!no_replace || !this.blocks[index]) {
+                    this.blocks[index] = block.id
+                }
             }
 
             setNeighbour(mask, chunk) {
@@ -709,7 +745,8 @@
                     )
                 }
 
-                function drawTree(x, y, z, random) {
+                function plantTree(x, y, z, random) {
+                    if(x < 2 || x >= size.x - 2 || z < 2 || z >= size.z - 2) return
                     const height = Math.ceil(random() * 8 + 2)
                     for(let yy = 0; yy < height; yy++) {
                         setBlock(x, y + yy, z, blocks_palette.oak_log)
@@ -724,7 +761,7 @@
                             for(let zz = -radius.xz; zz <= radius.xz; zz++) {
                                 if(xx * xx + yy * yy + zz * zz <= radius.xz * radius.xz) {
                                     if(xx == 0 && yy < 2 && zz == 0) continue
-                                    setBlock(ax + xx, ay + yy, az + zz, blocks_palette.oak_leaves)
+                                    setBlock(ax + xx, ay + yy, az + zz, blocks_palette.oak_leaves, true)
                                 }
                             }
                         }
@@ -766,7 +803,7 @@
                             }
                         }
                         if(h > water_level && h < 75 && Math.round(random() * tree_chance) == 0) {
-                            drawTree(x, h, z, random)
+                            plantTree(x, h, z, random)
                         }
                     }
                 }
@@ -794,7 +831,9 @@
                     } else if(this.isInBounds(nx, ny, nz)) {
                         block_id = this.blocks[this.getIndex(nx, ny, nz)]
                     } else {
-                        const chunk_addr = world.getChunkAddr(nx + coord.x, ny + coord.y, nz + coord.z)
+                        // globalThis.sdsdfsd??=0
+                        // if(globalThis.sdsdfsd++%1000==0)console.log(globalThis.sdsdfsd)
+                        const chunk_addr = world.getChunkAddr(nx + coord.x, ny + coord.y, nz + coord.z, _check_solid)
                         const chunk = getChunk(chunk_addr)
                         if(chunk) {
                             const bx = ((nx + chunk.coord.x) % size.x + size.x) % size.x
@@ -826,8 +865,10 @@
             makeVertices() {
 
                 const { blocks, size } = this
+                const p = performance.now()
 
                 let { doubleside, regular, transparent } = this.meshes
+
                 for(let i = 0; i < blocks.length; i++) {
                     const block_id = blocks[i]
                     if(!block_id) continue
@@ -855,6 +896,9 @@
                     }
                 }
 
+                stata.make_vertices++
+                stata.make_vertices_total_time += performance.now() - p
+                stata.make_vertices_time_per_one = stata.make_vertices_total_time / stata.make_vertices
                 this.update()
 
             }
@@ -943,6 +987,51 @@
                 }
                 this.neighbours_mask = 0
                 this.blocks.fill(0)
+            }
+
+        }
+
+        class Inventory {
+            index = 0
+            items = []
+            selector = null
+
+            constructor() {
+                const inventory_canvas = document.createElement('canvas')
+                const inventory_ctx = inventory_canvas.getContext('2d')
+                inventory_canvas.width = Object.values(blocks_palette).length * 16
+                inventory_canvas.height = 16
+                let i = 0
+                for(const [name, block] of Object.entries(blocks_palette)) {
+                    if(block.faces.length == 0) continue
+                    if(['water', 'oak_leaves', 'short_grass'].includes(name)) continue
+                    block.name = name
+                    inventory_ctx.drawImage(block.faces[0].texture.image, i * 16, 0, 16, 16)
+                    this.items.push(block)
+                    i++
+                }
+                // Сохраняем текущее содержимое
+                const temp_canvas = document.createElement('canvas')
+                const temp_ctx = temp_canvas.getContext('2d')
+                temp_canvas.width = i * 16
+                temp_canvas.height = inventory_canvas.height
+                temp_ctx.drawImage(inventory_canvas, 0, 0)
+                const image = new Image()
+                image.src = temp_canvas.toDataURL()
+                const div = document.getElementById('inventory')
+                image.onload = () => {
+                    image.classList.add('inventory_texture')
+                    div.appendChild(image)
+                }
+                this.selector = document.getElementById('inventory-selector')
+            }
+
+            select(shift) {
+                this.index += shift
+                if(this.index < 0) this.index = this.items.length - 1
+                if(this.index >= this.items.length) this.index = 0
+                this.selector.style.left = (this.index * 16 - 2) + 'px'
+                player_controller.inventory.current_block = this.items[this.index]
             }
 
         }
@@ -1137,6 +1226,8 @@
         const _ca_gcaddr        = new THREE.Vector3()
         const up                = new THREE.Vector3(0, 1, 0)
         const _un_vec           = new THREE.Vector3()
+        const _check_solid      = new THREE.Vector3()
+        const _chunk_mx_addr    = new THREE.Vector3()
         const neighbours_cache  = [0, 0, 0, 0, 0, 0]
         const neighbours_empty  = [0, 0, 0, 0, 0, 0]
         const empty_face        = [0, 0, 0, 0]
@@ -1158,6 +1249,10 @@
         let speed_mul = 1
         let pnw1
         let shader_materials
+        /**
+         * @type {Inventory}
+         */
+        let inventory
 
         // 
         const scene = new THREE.Scene()
@@ -1217,7 +1312,11 @@
 
             // on mouse wheel
             document.addEventListener('wheel', (event) => {
-                speed_mul *= event.deltaY < 0 ? 1.1 : 0.9
+                if(spectator_mode) {
+                    speed_mul *= event.deltaY < 0 ? 1.1 : 0.9
+                } else {
+                    inventory.select(event.deltaY > 0 ? 1 : -1)
+                }
             })
 
             document.addEventListener('mousedown', (event) => {
@@ -1258,11 +1357,7 @@
                     }
                     case 'F4':
                         if (!key_state) {
-                            const pos = {...getPlayerPosition()}
-                            localStorage.setItem('player_position', JSON.stringify(pos))
-                            localStorage.setItem('saved_pos', JSON.stringify(pos))
-                            localStorage.setItem('spectator_mode', spectator_mode)
-                            localStorage.setItem('rotation', JSON.stringify(camera.rotation.toVector3()))
+                            save()
                         }
                         break
                     case 'KeyR':
@@ -1282,6 +1377,7 @@
                     case 'KeyG':
                         if (!key_state) {
                             toggleGamemode()
+                            save()
                             event.preventDefault()
                             event.stopPropagation()
                         }
@@ -1560,6 +1656,7 @@
                 }
                 ctx.drawImage(img.img, x_offset, y_offset, img.width, img.height)
                 // Save UV coordinates
+                textures[img.key].image = img.img
                 textures[img.key].uv = [
                     x_offset / atlas_size,
                     1 - y_offset / atlas_size,
@@ -1581,17 +1678,13 @@
 
         function getPlayerPosition() { return player_controller.position }
 
-        const _chunk_matrix_addr = new THREE.Vector3()
         function getChunkMatrixAddr(chunk_addr) {
             // globalThis.asdasdas ??= 0
             // if(globalThis.asdasdas++%1000==0)console.log(globalThis.asdasdas)
-            const player_xyz = getPlayerPosition()
-            const player_chunk = world.getChunkAddr(player_xyz.x, player_xyz.y, player_xyz.z, _ca_gcaddr)
-            const player_matrix_x = ((player_chunk.x % matrix_side) + matrix_side) % matrix_side
-            const player_matrix_z = ((player_chunk.z % matrix_side) + matrix_side) % matrix_side
-            const x = (player_matrix_x + ((chunk_addr.x - player_chunk.x) % matrix_side) + matrix_side) % matrix_side
-            const z = (player_matrix_z + ((chunk_addr.z - player_chunk.z) % matrix_side) + matrix_side) % matrix_side
-            return _chunk_matrix_addr.set(x, 0, z)
+            const { player_matrix_x, player_matrix_z, player_chunk_addr } = player_controller
+            const x = (player_matrix_x + ((chunk_addr.x - player_chunk_addr.x) % matrix_side) + matrix_side) % matrix_side
+            const z = (player_matrix_z + ((chunk_addr.z - player_chunk_addr.z) % matrix_side) + matrix_side) % matrix_side
+            return _chunk_mx_addr.set(x, 0, z)
         }
 
         function getChunk(chunk_addr, ignore_check_addr = false) {
@@ -1657,7 +1750,7 @@
         }
 
         function teleportTo(pos) {
-            player_controller.position.copy(pos)
+            player_controller.setPosition(pos)
             player_controller.velocity.y = 0
         }
 
@@ -1675,7 +1768,11 @@
             chunk ||= new Chunk(world, chunk_size, seed)
             chunk.dispose()
             chunk.init(addr)
+            const p = performance.now()
             chunk.generate()
+            stata.generated_chunks++
+            stata.generated_chunks_total_time += performance.now() - p
+            stata.generated_chunks_time_per_one = stata.generated_chunks_total_time / stata.generated_chunks
             return chunk
         }
 
@@ -1686,6 +1783,14 @@
         function calcCircularRelativeIndex(i, g) {
             const n = matrix_side
             return ((i - g + n + render_distance) % n) - render_distance
+        }
+
+        function save() {
+            const pos = {...getPlayerPosition()}
+            localStorage.setItem('player_position', JSON.stringify(pos))
+            localStorage.setItem('saved_pos', JSON.stringify(pos))
+            localStorage.setItem('spectator_mode', spectator_mode)
+            // localStorage.setItem('rotation', JSON.stringify(camera.rotation.toVector3()))
         }
 
         // 
@@ -1820,9 +1925,10 @@
 
         function chunkWorks() {
             const player_xyz = getPlayerPosition()
+            const { player_matrix_x, player_matrix_z, player_chunk_addr } = player_controller
             const { x: player_chunk_x, y: player_chunk_y, z: player_chunk_z } = world.getChunkAddr(player_xyz.x, player_xyz.y, player_xyz.z)
-            const player_matrix_x = ((player_chunk_x % matrix_side) + matrix_side) % matrix_side
-            const player_matrix_z = ((player_chunk_z % matrix_side) + matrix_side) % matrix_side
+            // const player_matrix_x = ((player_chunk_x % matrix_side) + matrix_side) % matrix_side
+            // const player_matrix_z = ((player_chunk_z % matrix_side) + matrix_side) % matrix_side
             const cell_chunk_addr = new THREE.Vector3()
             let max_generates = 3
             // let max_generates = 2
@@ -1838,9 +1944,9 @@
                 const x = ti % matrix_side
                 const z = Math.floor(ti / matrix_side)
                 cell_chunk_addr.set(
-                    player_chunk_x + calcCircularRelativeIndex(x, player_matrix_x),
-                    player_chunk_y,
-                    player_chunk_z + calcCircularRelativeIndex(z, player_matrix_z),
+                    player_chunk_addr.x + calcCircularRelativeIndex(x, player_matrix_x),
+                    player_chunk_addr.y,
+                    player_chunk_addr.z + calcCircularRelativeIndex(z, player_matrix_z),
                 )
                 if(!chunk || !chunk.addr.equals(cell_chunk_addr)) {
                     matrix[ti] = generateChunk(cell_chunk_addr)
@@ -1909,7 +2015,7 @@
                 move.addScaledVector(direction, velocity.z)
                 move.addScaledVector(right, velocity.x)
                 move.y += velocity.y
-                player_controller.position.add(move)
+                player_controller.addPosition(move)
             } else {
                 player_controller.update(elapsed)
             }
@@ -1985,6 +2091,7 @@
 
             document.body.appendChild(renderer.domElement)
 
+            inventory = new Inventory()
             addListeners()
             animate()
 
