@@ -1113,7 +1113,7 @@
         const vpp               = 3 // vertices per polygon
         const bob_зarams        = { time: 0, frequency: 8, amplitudeX: 0.05, amplitudeY: 0.1, amplitude: 0.1 }
         const seed              = 'seed' 
-        const player_height     = 1.8
+        const player_height     = 1.8 - 0.5
         const fog_color         = new THREE.Color(0.470588, 0.780392, 0.921569).convertSRGBToLinear() // Sky color (light blue) like in Minecraft
         const pnw               = performance.now()
         let render_distance     = 8
@@ -1942,7 +1942,7 @@
             const block_in_camera = world.getBlock(...eye_block_pos.toArray())
 
             for(const mat of Object.values(shader_materials)) {
-                const cam_pos = applyBobView(camera.position, elapsed)
+                const cam_pos = camera.position // applyBobView(camera.position, elapsed)
                 mat.uniforms.data.value.cameraPosition.copy(cam_pos)
                 mat.uniforms.data.value.time = performance.now() / 1000
                 mat.uniforms.data.value.in_water = block_in_camera?.id == 4 ? 1 : 0
