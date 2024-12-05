@@ -540,11 +540,6 @@
                 const chunk            = this.chunk
                 const coord            = chunk.coord
                 const [ attr_position, attr_uv, attr_color, attr_flag ] = this.attributes
-
-                const ox = coord.x
-                const oy = coord.y
-                const oz = coord.z
-
                 let used_polygons = this.used_polygons
                 let vi            = used_polygons * this.vertex_size * vpp
                 let ui            = used_polygons * this.uvs_size * vpp
@@ -554,9 +549,9 @@
                 if(!attr_position) debugger
 
                 for (let i = 0; i < vertices.length; i += 3) {
-                    attr_position.array[vi++] = ox + x + hs * vertices[i] + 0.5
-                    attr_position.array[vi++] = oy + y + hs * vertices[i + 1] + 0.5
-                    attr_position.array[vi++] = oz + z + hs * vertices[i + 2] + 0.5
+                    attr_position.array[vi++] = x + hs * vertices[i] + 0.5
+                    attr_position.array[vi++] = y + hs * vertices[i + 1] + 0.5
+                    attr_position.array[vi++] = z + hs * vertices[i + 2] + 0.5
                     // Add UV, scaling them by u, v, u2, v2 values
                     attr_uv.array[ui++] = uv[(i / 3) * 2] === 0 ? face_uv[0] : face_uv[2]
                     attr_uv.array[ui++] = uv[(i / 3) * 2 + 1] === 0 ? face_uv[1] : face_uv[3]
@@ -925,7 +920,16 @@
 
             update() {
                 for(const mesh of Object.values(this.meshes)) {
-                    mesh?.updateMesh()
+                    if(mesh) {
+                        mesh.updateMesh()
+                        const shift = getPlayerPosition().clone().add(acc_shift)
+                        mesh.mesh.position.set(
+                            this.coord.x - shift.x,
+                            0,
+                            this.coord.z - shift.z,
+                        )
+
+                    }
                 }
             }
 
@@ -1115,15 +1119,18 @@
         let render_distance     = 8
         const chunk_size        = {x: 16, y: 128, z: 16}
         let matrix_side         = render_distance * 2 + 1
+        /**
+         * @type {Array<Chunk>}
+         */
         const matrix            = new Array(matrix_side ** 2) // chunks that have already been generated and are ready to be rendered
         const DEFAULT_SPAWN_POS = {x: (render_distance * chunk_size.x) / 2, y: 120, z: (render_distance * chunk_size.z) / 2}
         const scene_info        = { quads: 0 }
         const saved_pos         = localStorage.getItem('saved_pos')
         const player_position   = localStorage.getItem('player_position')
-        const init_pos          = player_position ? JSON.parse(player_position) : DEFAULT_SPAWN_POS
         const simplex           = new SimplexNoise('1')
         const world             = new World(chunk_size, seed)
-        const player_controller = new PlayerController(world, 9.8, 0.9, init_pos)
+        const start_position    = new THREE.Vector3().copy(player_position ? JSON.parse(player_position) : DEFAULT_SPAWN_POS)
+        const player_controller = new PlayerController(world, 9.8, 0.9, start_position)
         const velocity          = new THREE.Vector3()
         const direction         = new THREE.Vector3()
         const _ca               = new THREE.Vector3()
@@ -1136,6 +1143,7 @@
         const water_level       = 64
         const tree_chance       = 64
         const player_chunk_o    = new THREE.Vector3()
+        const acc_shift         = new THREE.Vector3()
 
         globalThis.world = world
         globalThis.direction = direction
@@ -1168,7 +1176,7 @@
         // light.position.set(0, 100, 0)
         scene.add(light)
         scene.background = fog_color
-        camera.position.set(init_pos.x, init_pos.y, init_pos.z)
+        camera.position.set(0, start_position.y, 0)
 
         // Создание геометрии сферы
         // const radius = 48
@@ -1197,7 +1205,6 @@
         function toggleGamemode() {
             spectator_mode = !spectator_mode
             updateGamemodeString()
-            teleportTo({...(spectator_mode ? player_controller.position : controls.getObject().position)})
         }
 
         function updateGamemodeString() {
@@ -1569,7 +1576,7 @@
             return new THREE.Texture(canvas)
         }
 
-        function getPlayerPosition() { return spectator_mode ? controls.getObject().position : player_controller.position }
+        function getPlayerPosition() { return player_controller.position }
 
         const _chunk_matrix_addr = new THREE.Vector3()
         function getChunkMatrixAddr(chunk_addr) {
@@ -1593,7 +1600,8 @@
         }
 
         // Function to update coordinates
-        function updateCoordinates(x, y, z) {
+        function updateCoordinates(xyz) {
+            const { x, y, z } = xyz
             if(Math.random() < 0.95) {
                 localStorage.setItem('player_position', JSON.stringify({x, y, z}))
                 localStorage.setItem('rotation', JSON.stringify({x: camera.rotation.x, y: camera.rotation.y, z: camera.rotation.z}))
@@ -1639,12 +1647,8 @@
         }
 
         function teleportTo(pos) {
-            if (spectator_mode) {
-                controls.getObject().position.copy(pos)
-            } else {
-                player_controller.position.copy(pos)
-                player_controller.velocity.y = 0
-            }
+            player_controller.position.copy(pos)
+            player_controller.velocity.y = 0
         }
 
         function teleportRandomly() {
@@ -1874,55 +1878,62 @@
             pnw1 = performance.now()
             frame++
 
-            if(spectator_mode) {
+            const prev_player_pos = player_controller.position.clone()
 
+            if(spectator_mode) {
                 const speed = 0.025 * speed_mul
                 velocity.multiplyScalar(0.95)
-
                 if (move_forward) velocity.z += speed
                 if (move_backward) velocity.z -= speed
                 if (move_left) velocity.x += speed
                 if (move_right) velocity.x -= speed
                 if (move_up) velocity.y += speed
                 if (move_down) velocity.y -= speed
-
                 // Calculate the direction of movement relative to the camera
                 direction.set(0, 0, 0)
                 camera.getWorldDirection(direction)
                 direction.y = 0 // Only move in the XZ plane
                 direction.normalize()
-
                 const right = new THREE.Vector3().crossVectors(up, direction).normalize()
                 const move = new THREE.Vector3()
                 move.addScaledVector(direction, velocity.z)
                 move.addScaledVector(right, velocity.x)
                 move.y += velocity.y
-
-                controls.getObject().position.add(move)
-
-                // Update camera position
-                const camera_pos = camera.position
-                updateCoordinates(camera_pos.x, camera_pos.y, camera_pos.z) // Update coordinates panel
-
+                player_controller.position.add(move)
             } else {
-
                 player_controller.update(elapsed)
-                const player_pos = player_controller.position
-                const camera_pos = applyBobView(player_pos, elapsed)
-                controls.getObject().position.copy(camera_pos)
-                updateCoordinates(player_pos.x, player_pos.y, player_pos.z) // Update coordinates panel
-
             }
+
+            const move = prev_player_pos.sub(player_controller.position)
+            camera.position.sub(move)
+            // camera.position.copy(applyBobView(camera.position, elapsed))
+            acc_shift.add(move)
+            acc_shift.y = 0
+
+            if(acc_shift.length() > 1024) {
+                camera.position.add(acc_shift)
+                let p = performance.now()
+                for(let i = 0; i < matrix.length; i++) {
+                    const chunk = matrix[i]
+                    if(chunk) {
+                        for(const mesh of Object.values(chunk.meshes)) {
+                            if(mesh) mesh.mesh.position.add(acc_shift)
+                        }
+                    }
+                }
+                acc_shift.set(0, 0, 0)
+                console.log('Shift:', performance.now() - p)
+            }
+
+            updateCoordinates(player_controller.position) // Update coordinates panel
 
             const eye_block_pos = camera.position.clone()
             eye_block_pos.y += player_height
             const block_in_camera = world.getBlock(...eye_block_pos.toArray())
 
-            // light.position.copy(camera.position)
-            // light.position.y = 100
-
             for(const mat of Object.values(shader_materials)) {
-                mat.uniforms.data.value.cameraPosition.copy({x: camera.position.x, y: camera.position.y, z: camera.position.z})
+                const cam_pos = applyBobView(camera.position, elapsed)
+                mat.uniforms.data.value.cameraPosition.copy(cam_pos)
                 mat.uniforms.data.value.time = performance.now() / 1000
                 mat.uniforms.data.value.in_water = block_in_camera?.id == 4 ? 1 : 0
                 mat.uniforms.data.value.cameraOffset.y = player_height
