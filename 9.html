@@ -202,6 +202,7 @@
                 }
 
                 this.position.copy(new_pos)
+                this.refresh()
 
                 if(this.isGrounded && move_up) {
                     // Клавиша пробела всё ещё зажата, вызываем jump()
@@ -250,7 +251,7 @@
                 while(distance < pickat_distance) {
                     _block_vec.set(x, y, z).floor()
                     const block = this.world.getBlock(_block_vec.x, _block_vec.y, _block_vec.z)
-                    if((block?.is_solid || block?.receive_ao || (any_block && block?.id != 0)) && (block?.id != blocks_palette.water.id)) {
+                    if((!block?.is_fluid && block?.style != 'planting' && block?.id != 0) || (any_block && block?.id != 0)) {
                         item.point = direction.clone().multiplyScalar(distance).add(origin).round(4)
                         item.side = side.multiplyScalar(-1)
                         item.block_pos = _block_vec
@@ -290,7 +291,7 @@
             breakBlock(event) {
                 const direction = new THREE.Vector3()
                 camera.getWorldDirection(direction)
-                const origin = getPlayerPosition().clone()
+                const origin = game.getPlayerPosition().clone()
                 origin.y += player_height
                 const result = this.traceRay(origin, direction, true)
                 if(result.hit) {
@@ -307,7 +308,7 @@
             placeBlock() {
                 const direction = new THREE.Vector3()
                 camera.getWorldDirection(direction)
-                const origin = getPlayerPosition().clone()
+                const origin = game.getPlayerPosition().clone()
                 origin.y += player_height
                 const result = this.traceRay(origin, direction)
                 if(result.hit) {
@@ -320,7 +321,7 @@
             cloneBlock() {
                 const direction = new THREE.Vector3()
                 camera.getWorldDirection(direction)
-                const origin = getPlayerPosition().clone()
+                const origin = game.getPlayerPosition().clone()
                 origin.y += player_height
                 const result = this.traceRay(origin, direction, true)
                 if(result.hit) {
@@ -413,19 +414,19 @@
 
             getBlock(x, y, z) {
                 const chunk_addr = this.getChunkAddr(x, y, z)
-                const chunk = getChunk(chunk_addr)
+                const chunk = game.getChunk(chunk_addr)
                 return chunk ? chunk.getBlock(x - chunk.coord.x, y - chunk.coord.y, z - chunk.coord.z) : blocks_palette.air
             }
 
             getBlockID(x, y, z) {
                 const chunk_addr = this.getChunkAddr(x, y, z)
-                const chunk = getChunk(chunk_addr)
+                const chunk = game.getChunk(chunk_addr)
                 return chunk ? chunk.getBlockID(x - chunk.coord.x, y - chunk.coord.y, z - chunk.coord.z) : 0
             }
 
             setBlock(x, y, z, block) {
                 const chunk_addr = this.getChunkAddr(x, y, z)
-                let /** @type Chunk */ chunk = getChunk(chunk_addr)
+                let /** @type Chunk */ chunk = game.getChunk(chunk_addr)
                 if(chunk) {
                     chunk.setBlock(x - chunk.coord.x, y - chunk.coord.y, z - chunk.coord.z, block)
                     for(const [key, mesh] of Object.entries(chunk.meshes)) {
@@ -449,12 +450,12 @@
                 const x = ((block_pos.x % chunk_size.x) + chunk_size.x) % chunk_size.x
                 const z = ((block_pos.z % chunk_size.z) + chunk_size.z) % chunk_size.z
                 const chunk_addr = this.getChunkAddr(block_pos.x, block_pos.y, block_pos.z)
-                const chunk = getChunk(chunk_addr)
+                const chunk = game.getChunk(chunk_addr)
                 if(chunk) {
-                    if(x == 0) this.remakeVertices(getChunk(_un_vec.set(chunk_addr.x - 1, 0, chunk_addr.z)))
-                    if(x == chunk_size.x - 1) this.remakeVertices(getChunk(_un_vec.set(chunk_addr.x + 1, 0, chunk_addr.z)))
-                    if(z == 0) this.remakeVertices(getChunk(_un_vec.set(chunk_addr.x, 0, chunk_addr.z - 1)))
-                    if(z == chunk_size.z - 1) this.remakeVertices(getChunk(_un_vec.set(chunk_addr.x, 0, chunk_addr.z + 1)))
+                    if(x == 0) this.remakeVertices(game.getChunk(_un_vec.set(chunk_addr.x - 1, 0, chunk_addr.z)))
+                    if(x == chunk_size.x - 1) this.remakeVertices(game.getChunk(_un_vec.set(chunk_addr.x + 1, 0, chunk_addr.z)))
+                    if(z == 0) this.remakeVertices(game.getChunk(_un_vec.set(chunk_addr.x, 0, chunk_addr.z - 1)))
+                    if(z == chunk_size.z - 1) this.remakeVertices(game.getChunk(_un_vec.set(chunk_addr.x, 0, chunk_addr.z + 1)))
                 }
             }
 
@@ -703,10 +704,10 @@
 
             updateNeighbours() {
                 const { addr, world } = this
-                const chunk_px = getChunk(_un_vec.set(addr.x + 1, addr.y, addr.z))
-                const chunk_nx = getChunk(_un_vec.set(addr.x - 1, addr.y, addr.z))
-                const chunk_pz = getChunk(_un_vec.set(addr.x, addr.y, addr.z + 1))
-                const chunk_nz = getChunk(_un_vec.set(addr.x, addr.y, addr.z - 1))
+                const chunk_px = game.getChunk(_un_vec.set(addr.x + 1, addr.y, addr.z))
+                const chunk_nx = game.getChunk(_un_vec.set(addr.x - 1, addr.y, addr.z))
+                const chunk_pz = game.getChunk(_un_vec.set(addr.x, addr.y, addr.z + 1))
+                const chunk_nz = game.getChunk(_un_vec.set(addr.x, addr.y, addr.z - 1))
                 if(chunk_px && !chunk_px.dirty) { this.setNeighbour(1, chunk_px); chunk_px.setNeighbour(2, this) }
                 if(chunk_nx && !chunk_nx.dirty) { this.setNeighbour(2, chunk_nx); chunk_nx.setNeighbour(1, this) }
                 if(chunk_pz && !chunk_pz.dirty) { this.setNeighbour(4, chunk_pz); chunk_pz.setNeighbour(8, this) }
@@ -778,7 +779,7 @@
                             if(y < h) {
                                 let block = blocks_palette.stone
                                 const y_from_top = h - y
-                                if(y < 80 + n2 * (8 * planing)) {
+                                if(y < 80 + n2 * (16 * planing)) {
                                     if(y == water_level - 1 && y == h - 1) {
                                         block = blocks_palette.sand
                                     } else if(y < n0 * 2 + 3) {
@@ -798,7 +799,7 @@
                                     }
                                 }
                                 setBlock(x, y, z, block)
-                            } else { //if(y < water_level && y >= h) {
+                            } else { // if(y < water_level && y >= h) {
                                 setBlock(x, y, z, blocks_palette.water)
                             }
                         }
@@ -818,7 +819,10 @@
                     z >= 0 && z < this.size.z
             }
 
-            checkSolidNeighbours(x, y, z, neighbours, transparent) {
+            checkSolidNeighbours(x, y, z, neighbours, is_water_plain, is_doubleside) {
+                if(is_doubleside) {
+                    return true
+                }
                 const { coord, size } = this
                 let cnt = 0
                 for (let i = 0; i < 6; i++) {
@@ -834,7 +838,7 @@
                         // globalThis.sdsdfsd??=0
                         // if(globalThis.sdsdfsd++%1000==0)console.log(globalThis.sdsdfsd)
                         const chunk_addr = world.getChunkAddr(nx + coord.x, ny + coord.y, nz + coord.z, _check_solid)
-                        const chunk = getChunk(chunk_addr)
+                        const chunk = game.getChunk(chunk_addr)
                         if(chunk) {
                             const bx = ((nx + chunk.coord.x) % size.x + size.x) % size.x
                             const by = ((ny + chunk.coord.y) % size.y + size.y) % size.y
@@ -848,7 +852,7 @@
                         neighbours[i] = 0
                     } else {
                         const block = block_by_id[block_id]
-                        neighbours[i] = (block.is_solid && (!block.transparent || transparent)) ? block.id : 0
+                        neighbours[i] = (block.is_solid && (!block.transparent || is_water_plain)) ? block.id : 0
                     }
                     cnt += neighbours[i] ? 1 : 0
                 }
@@ -876,22 +880,19 @@
                     const x = i % size.x
                     const y = Math.floor(i / size.x) % size.y
                     const z = Math.floor(i / (size.x * size.y))
-                    if(!block.is_solid || this.checkSolidNeighbours(x, y, z, neighbours_cache, block.transparent)) {
-                        switch(block.style) {
-                            case 'planting': {
-                                doubleside ??= this.addMaterialMesh('doubleside')
-                                doubleside.addPlant(x, y, z, block)
-                                break
-                            }
-                            default: {
-                                if(block.transparent) {
-                                    transparent ??= this.addMaterialMesh('transparent')
-                                    transparent.addCube(x, y, z, block, neighbours_cache)
-                                } else {
-                                    regular ??= this.addMaterialMesh('regular')
-                                    regular.addCube(x, y, z, block, block.is_solid ? neighbours_cache : neighbours_empty)
-                                }
-                            }
+                    if(!block.is_solid || this.checkSolidNeighbours(x, y, z, neighbours_cache, block.transparent, block.is_doubleside)) {
+                        if(block.style == 'planting') {
+                            doubleside ??= this.addMaterialMesh('doubleside')
+                            doubleside.addPlant(x, y, z, block)
+                        } else if(block.is_doubleside) {
+                            doubleside ??= this.addMaterialMesh('doubleside')
+                            regular.addCube(x, y, z, block, neighbours_empty)
+                        } else if(block.transparent) {
+                            transparent ??= this.addMaterialMesh('transparent')
+                            transparent.addCube(x, y, z, block, neighbours_cache)
+                        } else {
+                            regular ??= this.addMaterialMesh('regular')
+                            regular.addCube(x, y, z, block, block.is_solid ? neighbours_cache : neighbours_empty)
                         }
                     }
                 }
@@ -909,7 +910,7 @@
                 }
                 const { coord, size } = this
                 const chunk_addr = world.getChunkAddr(x + coord.x, y + coord.y, z + coord.z)
-                const chunk = getChunk(chunk_addr)
+                const chunk = game.getChunk(chunk_addr)
                 return chunk ? chunk.blocks[chunk.getIndex(
                     ((x + coord.x) % size.x + size.x) % size.x,
                     ((y + coord.y) % size.y + size.y) % size.y,
@@ -966,7 +967,7 @@
                 for(const mesh of Object.values(this.meshes)) {
                     if(mesh) {
                         mesh.updateMesh()
-                        const shift = getPlayerPosition().clone().add(acc_shift)
+                        const shift = game.getPlayerPosition().clone().add(acc_shift)
                         mesh.mesh.position.set(
                             this.coord.x - shift.x,
                             0,
@@ -1036,6 +1037,719 @@
 
         }
 
+
+        /**
+         */
+        class Game {
+
+            constructor() {
+                this.controls = new THREE.PointerLockControls(camera, document.body)
+                // Create an element to display coordinates
+                this.coords_el = document.getElementById('coords')
+                this.updateGamemodeString()
+
+                this.traverses = new VectorCollector()
+                this._traverses_pos = new THREE.Vector3()
+                
+                this.walk_speed_counter = {
+                    total_distance: 0,
+                    start_time: 0,
+                    speed: 0,
+                    prev_pos: null,
+                    add(pos) {
+                        if(this.prev_pos) {
+                            this.total_distance += pos.distanceTo(this.prev_pos)
+                            const elapsed_time = (performance.now() - this.start_time) / 1000
+                            this.speed = (this.total_distance / elapsed_time * 3.6)
+                            if(elapsed_time > 0.2) {
+                                this.start_time = performance.now()
+                                this.total_distance = 0
+                            }
+                            this.prev_pos.copy(pos)
+                        } else {
+                            this.start_time = performance.now()
+                            this.prev_pos = pos.clone()  
+                        }
+                    }
+                }
+
+                this.createTexture().then(texture => {
+                    shader_materials = {
+                        regular: this.createShaderMaterial(texture),
+                        transparent: this.createShaderMaterial(texture, { side: THREE.DoubleSide, transparent: true, depthWrite: false, depthTest: true, blending: THREE.NormalBlending}),
+                        doubleside: this.createShaderMaterial(texture, { side: THREE.DoubleSide }),
+                    }
+                    console.log('Map:', render_distance * chunk_size.x, 'x', render_distance * chunk_size.z)
+                    stats = new Stats()
+                    stats.showPanel(0) // 0: FPS, 1: MS, 2: MB
+                    document.body.appendChild(stats.domElement)
+                    document.body.appendChild(renderer.domElement)
+                    inventory = new Inventory()
+                    this.addListeners()
+                    this.animate()
+                })
+
+            }
+
+            toggleGamemode() {
+                spectator_mode = !spectator_mode
+                this.updateGamemodeString()
+            }
+
+            updateGamemodeString() {
+                document.getElementById('gamemode').innerText = spectator_mode ? 'Spectator' : 'Survival'
+            }
+
+            addListeners() {
+
+                const controls = this.controls
+
+                document.body.addEventListener('click', () => controls.lock())
+
+                // on mouse wheel
+                document.addEventListener('wheel', (event) => {
+                    debugger
+                    if(spectator_mode) {
+                        speed_mul *= event.deltaY < 0 ? 1.1 : 0.9
+                    } else {
+                        inventory.select(event.deltaY > 0 ? 1 : -1)
+                    }
+                })
+
+                document.addEventListener('mousedown', (event) => {
+                    if (event.button === 0 && controls.isLocked) player_controller.breakBlock(event)
+                    if (event.button === 1 && controls.isLocked) player_controller.cloneBlock()
+                    if (event.button === 2 && controls.isLocked) player_controller.placeBlock()
+                })
+
+                window.addEventListener('resize', () => {
+                    camera.aspect = window.innerWidth / window.innerHeight
+                    camera.updateProjectionMatrix()
+                    renderer.setSize(window.innerWidth, window.innerHeight)
+                })
+
+                const handleKeyEvent = (event, is_key_down) => {
+                    const key_state = is_key_down;
+                    switch (event.code) {
+                        case 'KeyW': move_forward = key_state; break
+                        case 'KeyS': move_backward = key_state; break
+                        case 'KeyA': move_left = key_state; break
+                        case 'KeyD': move_right = key_state; break
+                        case 'ShiftLeft': move_down = key_state; break
+                        case 'Space': 
+                            if (key_state) player_controller.jump()
+                            move_up = key_state
+                            break
+                        case 'PageUp': {
+                            if(key_state) {
+                                render_distance = Math.min(64, render_distance + 1)
+                            }
+                            break
+                        }
+                        case 'PageDown': {
+                            if(key_state) {
+                                render_distance = Math.max(1, render_distance - 1)
+                            }
+                            break
+                        }
+                        case 'KeyR':
+                            if (!key_state) {
+                                let pos = localStorage.getItem('saved_pos')
+                                game.teleportTo(pos ? JSON.parse(pos) : DEFAULT_SPAWN_POS)
+                            }
+                            break
+                        case 'F4':
+                            if (!key_state) {
+                                game.save()
+                            }
+                            break
+                        case 'F8':
+                            if (key_state) game.teleportRandomly()
+                            event.preventDefault()
+                            event.stopPropagation()
+                            break;
+                        case 'KeyP':
+                            if (!key_state) printStat()
+                            break;
+                        case 'KeyG':
+                            if (!key_state) {
+                                this.toggleGamemode()
+                                game.save()
+                                event.preventDefault()
+                                event.stopPropagation()
+                            }
+                            break
+                    }
+                };
+
+                document.addEventListener('keydown', (event) => handleKeyEvent(event, true))
+                document.addEventListener('keyup', (event) => handleKeyEvent(event, false))
+
+            }
+
+            createShaderMaterial(texture, options = {}) {
+                texture.minFilter = THREE.NearestFilter
+                texture.magFilter = THREE.NearestFilter
+                texture.needsUpdate = true
+                return new THREE.ShaderMaterial({
+                    vertexColors: true,
+                    side: THREE.FrontSide,
+                    ...options,
+                    uniforms: {
+                        data: { 
+                            value: {
+                                cameraPosition: new THREE.Vector3(),
+                                cameraOffset: new THREE.Vector3(),
+                                fogColor: new THREE.Color(0.470588, 0.780392, 0.921569),
+                                fogNear: 100.0,
+                                time: 1.0,
+                                in_water: 0.0,
+                                fogFar: render_distance * chunk_size.x,
+                                texture: texture,
+                                // shadowMatrix: { value: light.shadow.matrix },
+                            }
+                        }
+                    },
+                    vertexShader: `
+                        struct Data {
+                            vec3 cameraPosition;
+                            vec3 cameraOffset;
+                            vec3 fogColor;
+                            float fogNear;
+                            float fogFar;
+                            float time;
+                            float in_water;
+                            sampler2D texture;
+                            // mat4 shadowMatrix[NUM_DIR_LIGHTS];
+                        };
+                        uniform Data data;
+
+                        // #include <common>
+                        // #include <shadowmap_pars_vertex>
+                        // #include <packing>
+
+                        varying vec3 vColor;
+                        varying vec3 vWorldPosition;
+                        varying vec4 vShadowCoord;
+                        varying vec2 vUv;
+                        attribute float flag;
+                        varying float vFlag;
+                        varying float vTime;
+                        varying float vInWater;
+                        varying vec3 vNormal;
+
+                        bool checkFlag(int bit) {
+                            float rounded = floor(vFlag + 0.5); // Round the value
+                            float divisor = float(bit);
+                            return mod(floor(rounded / divisor), 2.0) >= 1.0; // Check if the bit is set
+                        }
+
+                        void main() {
+                            vUv = uv;
+                            vTime = data.time;
+                            vInWater = data.in_water;
+                            vFlag = flag; // Send flag to fragment shader
+                            vColor = color;
+                            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                            vWorldPosition = worldPosition.xyz;
+                            vNormal = normal;
+
+                            // waves
+                            vec3 modifiedPosition = position;
+                            if (checkFlag(1)) {
+                                // water waves
+                                const float PI = 3.14159265359;
+                                const float WAVE_NUMBER = 2.0 * PI / 4.0; // 2π / 2 метров
+                                const float AMPLITUDE = 0.03; // Мелкая амплитуда
+                                modifiedPosition.y -= 2.0 / 16.0;
+                                modifiedPosition.y += sin(position.x * WAVE_NUMBER + data.time * 2.0) * AMPLITUDE;
+                                modifiedPosition.y += cos(position.z * WAVE_NUMBER + data.time * 2.0) * AMPLITUDE;
+                            } else if (checkFlag(16)) {
+                                // leaves movements
+                                modifiedPosition.x += sin(position.x * 2.0 + data.time * 2.) * 0.0625;
+                                modifiedPosition.x += cos(position.z * 2.0 + data.time * 2.) * 0.0625;
+                                modifiedPosition.z += sin(position.x * 2.0 + data.time * 2.) * 0.0625;
+                                modifiedPosition.z += cos(position.z * 2.0 + data.time * 2.) * 0.0625;
+                            }
+
+                            // vShadowCoord = data.shadowMatrix[0] * worldPosition;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(modifiedPosition - data.cameraOffset, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        varying vec2 vUv; // Receive UV from vertex shader
+                        varying float vTime;
+                        varying float vInWater;
+                        varying vec3 vColor;
+                        varying vec3 vWorldPosition;
+                        varying vec4 vShadowCoord;
+                        varying float vFlag;
+                        varying vec3 vNormal; // Receive normal from vertex shader
+
+                        struct Data {
+                            vec3 cameraPosition;
+                            vec3 cameraOffset;
+                            vec3 fogColor;
+                            float fogNear;
+                            float fogFar;
+                            float time;
+                            float in_water;
+                            sampler2D texture;
+                            // mat4 shadowMatrix[NUM_DIR_LIGHTS];
+                        };
+                        uniform Data data;
+
+                        // #include <shadowmap_pars_fragment>
+                        // #include <packing>
+
+                        const int FLAG_WATER_ANIMATED = 1;
+                        const int FLAG_GRASS_BLOCK_SIDE = 2;
+                        // const int UNUSED_FLAG_GRAVEL = 4;
+                        // const int FLAG_ = 8;
+                        const int FLAS_ANIMATED_LEAVES = 16;
+                        const int FLAG_NO_CAN_TAKE_AO = 128;
+                        const int FLAG_GRASS_COLOR = 64;
+
+                        float hash(vec3 p) {
+                            p = fract(p * 0.1031);
+                            p += dot(p, p.yzx + 19.19);
+                            return fract((p.x + p.y) * p.z);
+                        }
+
+                        bool checkFlag(int bit) {
+                            float rounded = floor(vFlag + 0.5); // Round the value
+                            float divisor = float(bit);
+                            return mod(floor(rounded / divisor), 2.0) >= 1.0; // Check if the bit is set
+                        }
+
+                        void main() {
+
+                            vec3 grass_color = vec3(84./256., 147./256., 42./256.);
+                            vec3 water_color = vec3(15./256., 94./256., 156./256.);
+
+                            float scale = 16.0;
+                            vec3 pp = vWorldPosition;
+                            if(checkFlag(8)) {
+                                pp.y /= 2.0;
+                            }
+                            vec3 quantizedPos = floor(pp * scale + 1e-3);
+                            float randomness = hash(quantizedPos);
+                            vec3 finalColor = vColor;
+
+                            vec2 uv = vUv;
+
+                            if (checkFlag(FLAG_WATER_ANIMATED)) {
+                                float frame_count = 32.0;
+                                float frame_height = 1.0 / frame_count;
+                                float current_frame = mod(floor(vTime * 16.), frame_count);
+                                uv.y = uv.y - frame_height * current_frame;
+                            }
+
+                            vec4 texColor = texture2D(data.texture, uv);
+
+                            if(texColor.a < 0.1) {
+                                discard;
+                            }
+
+                            if(checkFlag(FLAS_ANIMATED_LEAVES)) {
+                                texColor.rgb *= grass_color;
+                            }
+                            if(checkFlag(FLAG_WATER_ANIMATED)) {
+                                texColor.rgb *= water_color;
+                            }
+                            if(checkFlag(FLAG_GRASS_COLOR)) {
+                                texColor.rgb *= grass_color;
+                            }
+
+                            finalColor = texColor.rgb;
+
+                            if(vInWater > 0.0) {
+                                finalColor = mix(finalColor, water_color, 0.25);
+                            }
+
+                            if (checkFlag(FLAG_GRASS_BLOCK_SIDE)) {
+                                // Top part of grass block
+                                float quadY = mod(vWorldPosition.y, 1.0);
+                                float rr = vec3(randomness).y * 0.2;
+                                if (quadY > floor((0.7 + rr) * 16.) / 16.) {
+                                    // Change the color for the top part of the quad
+                                    finalColor = grass_color;
+                                    vec3 colorDeviation = vec3(randomness) * 0.2 - 0.1;
+                                    finalColor = clamp(finalColor + colorDeviation, 0.0, 1.0);
+                                }
+                            }
+
+                            finalColor *= vColor;
+
+                            if(checkFlag(FLAG_NO_CAN_TAKE_AO)) {
+                                finalColor *= 1.2;
+                            } else {
+                                // Calculate normal based on position
+                                vec3 normal = normalize(vNormal);
+                                // Apply color change depending on the normal
+                                if (normal.y > 0.5) {
+                                    finalColor *= 1.2; // Lighten the top
+                                } else if (normal.y < -0.5) {
+                                    finalColor *= 0.5; // Darken the bottom
+                                } else if (normal.z < 0.0) {
+                                    finalColor *= 0.7; // Darken the north
+                                } else if (normal.z > 0.0) {
+                                    finalColor *= 0.7; // Lighten the south
+                                } else {
+                                    finalColor *= 0.9; // Other sides
+                                }
+                            }
+
+                            float distanceToCamera = length(vWorldPosition - data.cameraPosition);
+
+                            distanceToCamera *= vInWater > 0.0 ? 6.0 : 1.0;
+
+                            // Apply shadows
+                            // float shadowFactor = texture2DShadow(shadowMap[0], vShadowCoord.xyz); // Added for shadow calculation
+                            // finalColor *= shadowFactor; // Apply shadow factor
+
+                            // Apply fog
+                            float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
+                            vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
+                            // vec3 foggedColor = finalColor;
+
+                            float alpha = checkFlag(1) ? 0.75 : 1.0;
+                            gl_FragColor = vec4(foggedColor, alpha);
+                        }
+                    `
+                })
+
+            }
+
+            async createTexture() {
+                const canvas = document.createElement('canvas')
+                const ctx = canvas.getContext('2d')
+                const keys = Object.keys(textures)
+                // Load images and get their sizes
+                const images = await Promise.all(keys.map(key => {
+                    const img = new Image()
+                    img.src = 'data:image/png;base64,' + textures[key].bin
+                    return new Promise(resolve => {
+                        img.onload = () => resolve({ key, img, width: img.width, height: img.height })
+                    })
+                }))
+                // Determine the size of the atlas as the nearest power of two from the longest side of the textures
+                const max_side = Math.max(...images.map(img => Math.max(img.width, img.height)))
+                const atlas_size = Math.pow(2, Math.ceil(Math.log2(max_side)))
+                canvas.width = atlas_size
+                canvas.height = atlas_size
+                // Place textures in the atlas
+                let x_offset = 0
+                let y_offset = 0
+                let row_height = 0
+                images.forEach(img => {
+                    if (x_offset + img.width > atlas_size) {
+                        x_offset = 0
+                        y_offset += row_height
+                        row_height = 0
+                    }
+                    if (y_offset + img.height > atlas_size) {
+                        throw new Error('Не удалось разместить все текстуры в атласе. Увеличьте размер атласа.')
+                    }
+                    ctx.drawImage(img.img, x_offset, y_offset, img.width, img.height)
+                    // Save UV coordinates
+                    textures[img.key].image = img.img
+                    textures[img.key].uv = [
+                        x_offset / atlas_size,
+                        1 - y_offset / atlas_size,
+                        (x_offset + img.width) / atlas_size,
+                        1 - (y_offset + img.width) / atlas_size
+                    ]
+                    x_offset += img.width
+                    row_height = Math.max(row_height, img.height)
+                })
+                // function downloadCanvas(canvas, filename = 'atlas.png') {
+                //     const link = document.createElement('a')
+                //     link.download = filename
+                //     link.href = canvas.toDataURL('image/png')
+                //     link.click()
+                // }
+                // downloadCanvas(canvas, 'texture-atlas.png')
+                return new THREE.Texture(canvas)
+            }
+
+            getPlayerPosition() { return player_controller.position }
+
+            getChunkMatrixAddr(chunk_addr) {
+                // globalThis.asdasdas ??= 0
+                // if(globalThis.asdasdas++%1000==0)console.log(globalThis.asdasdas)
+                const { player_matrix_x, player_matrix_z, player_chunk_addr } = player_controller
+                const x = (player_matrix_x + ((chunk_addr.x - player_chunk_addr.x) % matrix_side) + matrix_side) % matrix_side
+                const z = (player_matrix_z + ((chunk_addr.z - player_chunk_addr.z) % matrix_side) + matrix_side) % matrix_side
+                return _chunk_mx_addr.set(x, 0, z)
+            }
+
+            getChunk(chunk_addr, ignore_check_addr = false) {
+                const { x, z } = this.getChunkMatrixAddr(chunk_addr)
+                const chunk = matrix[z * matrix_side + x]
+                if(chunk && (ignore_check_addr || chunk.addr.equals(chunk_addr))) {
+                    return chunk
+                }
+            }
+
+            // Function to update coordinates
+            updateCoordinates(xyz) {
+                const { x, y, z } = xyz
+                if(Math.random() > 0.95 && save_positions) {
+                    game.save()
+                }
+                if(frame % 5 === 0) {
+                    const chunk_coord = world.getChunkAddr(x, y, z)
+                    this.coords_el.textContent = `${localRound(x, 1)}, ${localRound(y, 1)}, ${localRound(z, 1)}\n`+
+                        `Chunk: ${chunk_coord.x}/${chunk_coord.y}/${chunk_coord.z}\n`+
+                        `Speed: ${this.walk_speed_counter.speed.toFixed(2)} km/h\n`+
+                        `Render distance: ${render_distance}`
+                }
+            }
+
+            // 
+            applyBobView(position, elapsed_time) {
+                const is_moving = move_forward || move_backward || move_left || move_right
+                if(!player_controller.isGrounded) {
+                    elapsed_time = 0
+                }
+                const { frequency, amplitudeX, amplitudeY } = bob_зarams
+                // If the player is moving, increase the time
+                if (is_moving) {
+                    beft = 1
+                } else {
+                    beft *= 0.9
+                }
+                bob_зarams.time += elapsed_time * 0.001 * beft
+                const offset_y = Math.abs(Math.sin(bob_зarams.time * frequency)) * amplitudeY // Shift by Y (sharp vertical swing)
+                const offset_x = Math.sin(bob_зarams.time * frequency * 0.5) * amplitudeX // Shift by X (smooth horizontal swing)
+                return new THREE.Vector3(
+                    position.x + offset_x,
+                    position.y - offset_y,
+                    position.z
+                )
+            }
+
+            teleportTo(pos) {
+                player_controller.setPosition(pos)
+                player_controller.velocity.y = 0
+            }
+
+            teleportRandomly() {
+                const range = 2000000
+                this.teleportTo(new THREE.Vector3(
+                    Math.round(Math.random() * range - range / 2) + 0.5,
+                    Math.round(100 + Math.random() * 16),
+                    Math.round(Math.random() * range - range / 2) + 0.5,
+                ))
+            }
+
+            generateChunk(addr) {
+                let /** @type {Chunk} */ chunk = this.getChunk(addr, true)
+                chunk ||= new Chunk(world, chunk_size, seed)
+                chunk.dispose()
+                chunk.init(addr)
+                const p = performance.now()
+                chunk.generate()
+                stata.generated_chunks++
+                stata.generated_chunks_total_time += performance.now() - p
+                stata.generated_chunks_time_per_one = stata.generated_chunks_total_time / stata.generated_chunks
+                return chunk
+            }
+
+            calcCircularRelativeIndex(i, g) {
+                const n = matrix_side
+                return ((i - g + n + render_distance) % n) - render_distance
+            }
+
+            save() {
+                const pos = {...game.getPlayerPosition()}
+                localStorage.setItem('player_position', JSON.stringify(pos))
+                localStorage.setItem('saved_pos', JSON.stringify(pos))
+                localStorage.setItem('spectator_mode', spectator_mode)
+                // localStorage.setItem('rotation', JSON.stringify(camera.rotation.toVector3()))
+            }
+
+            traverseSquareMatrix(center_x, center_z, size) {
+                const { _traverses_pos, traverses }  = this
+                _traverses_pos.set(center_x, center_z, size)
+                if(traverses.has(_traverses_pos)) {
+                    return traverses.get(_traverses_pos)
+                }
+                const cx = center_x
+                const cz = center_z
+                center_x = Math.floor(size / 2)
+                center_z = Math.floor(size / 2)
+                const result = []
+                const directions = [
+                    [0, 1], // right
+                    [1, 0], // down
+                    [0, -1], // left
+                    [-1, 0] // up
+                ]
+                const visited = Array.from({ length: size }, () => Array(size).fill(false))
+                let x = center_x
+                let z = center_z
+                let step = 1
+                result.push([x, z])
+                visited[x][z] = true // Помечаем начальную ячейку как посещённую
+                while (result.length < size * size) {
+                    for (let d = 0; d < 4; d++) {
+                        for (let i = 0; i < step; i++) {
+                            x = (x + directions[d][0] + size) % size
+                            z = (z + directions[d][1] + size) % size
+                            if (!visited[x][z]) {
+                                visited[x][z] = true
+                                result.push([x, z])
+                            }
+                        }
+                        if (d % 2 === 1) step++
+                    }
+                }
+                let resp = []
+                result.filter((arr, i) => {
+                    let [x, z] = arr
+                    const sz2 = size / 2
+                    x = (((x - center_x) % size)) % size
+                    z = (((z - center_z) % size)) % size
+                    let dist = x ** 2 + z ** 2
+                    let ok = dist < (sz2 ** 2)
+                    arr = [x + cx, z + cz]
+                    if(ok) {
+                        x = (x + cx + size) % size
+                        z = (z + cz + size) % size
+                        resp.push(z * size + x)
+                    }
+                    return ok
+                })
+                traverses.set(_traverses_pos, resp)
+                return resp
+            }
+
+            chunkWorks() {
+                const player_xyz = this.getPlayerPosition()
+                const { player_matrix_x, player_matrix_z, player_chunk_addr } = player_controller
+                const { x: player_chunk_x, y: player_chunk_y, z: player_chunk_z } = world.getChunkAddr(player_xyz.x, player_xyz.y, player_xyz.z)
+                // const player_matrix_x = ((player_chunk_x % matrix_side) + matrix_side) % matrix_side
+                // const player_matrix_z = ((player_chunk_z % matrix_side) + matrix_side) % matrix_side
+                const cell_chunk_addr = new THREE.Vector3()
+                let max_generates = 3
+                // let max_generates = 2
+                // Получаем углы поворота в радианах
+                // const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ')
+                // const yaw = (THREE.MathUtils.radToDeg(euler.y) + 360) % 360
+                // const tilt = THREE.MathUtils.radToDeg(euler.x)
+                // const traverse = traverseCone(player_matrix_x, player_matrix_z, matrix_side, yaw, Math.abs(tilt), 120)
+                const traverse = this.traverseSquareMatrix(player_matrix_x, player_matrix_z, matrix_side)
+                for(let i = 0; i < traverse.length; i++) {
+                    const ti = traverse[i]
+                    const chunk = matrix[ti]
+                    const x = ti % matrix_side
+                    const z = Math.floor(ti / matrix_side)
+                    cell_chunk_addr.set(
+                        player_chunk_addr.x + this.calcCircularRelativeIndex(x, player_matrix_x),
+                        player_chunk_addr.y,
+                        player_chunk_addr.z + this.calcCircularRelativeIndex(z, player_matrix_z),
+                    )
+                    if(!chunk || !chunk.addr.equals(cell_chunk_addr)) {
+                        matrix[ti] = this.generateChunk(cell_chunk_addr)
+                        if(--max_generates == 0) break
+                    } else if(chunk.quads == 0 && chunk.neighbours_mask == 15) {
+                        const neib_nx = game.getChunk(cell_chunk_addr.clone().add({x: -1, y: 0, z: 0}))
+                        const neib_px = game.getChunk(cell_chunk_addr.clone().add({x: 1, y: 0, z: 0}))
+                        const neib_nz = game.getChunk(cell_chunk_addr.clone().add({x: 0, y: 0, z: -1}))
+                        const neib_pz = game.getChunk(cell_chunk_addr.clone().add({x: 0, y: 0, z: 1}))
+                        if(neib_nx && neib_px && neib_nz && neib_pz) {
+                            chunk.makeVertices()
+                            if(--max_generates == 0) break
+                        }
+                    }
+                }
+            }
+
+            animate() {
+
+                pnw1 ??= performance.now()
+                stats.begin()
+                const elapsed = Math.min(performance.now() - pnw1, 32)
+                pnw1 = performance.now()
+                frame++
+
+                const prev_player_pos = player_controller.position.clone()
+
+                if(spectator_mode) {
+                    const speed = 0.025 * speed_mul
+                    velocity.multiplyScalar(0.95)
+                    if (move_forward) velocity.z += speed
+                    if (move_backward) velocity.z -= speed
+                    if (move_left) velocity.x += speed
+                    if (move_right) velocity.x -= speed
+                    if (move_up) velocity.y += speed/speed_mul
+                    if (move_down) velocity.y -= speed/speed_mul
+                    // Calculate the direction of movement relative to the camera
+                    direction.set(0, 0, 0)
+                    camera.getWorldDirection(direction)
+                    direction.y = 0 // Only move in the XZ plane
+                    direction.normalize()
+                    const right = new THREE.Vector3().crossVectors(up, direction).normalize()
+                    const move = new THREE.Vector3()
+                    move.addScaledVector(direction, velocity.z)
+                    move.addScaledVector(right, velocity.x)
+                    move.y += velocity.y
+                    player_controller.addPosition(move)
+                } else {
+                    player_controller.update(elapsed)
+                }
+
+                const move = prev_player_pos.sub(player_controller.position)
+                camera.position.sub(move)
+                // camera.position.copy(this.applyBobView(camera.position, elapsed))
+                acc_shift.add(move)
+                acc_shift.y = 0
+
+                if(acc_shift.length() > 1024) {
+                    camera.position.add(acc_shift)
+                    let p = performance.now()
+                    for(let i = 0; i < matrix.length; i++) {
+                        const chunk = matrix[i]
+                        if(chunk) {
+                            for(const mesh of Object.values(chunk.meshes)) {
+                                if(mesh) mesh.mesh.position.add(acc_shift)
+                            }
+                        }
+                    }
+                    acc_shift.set(0, 0, 0)
+                    console.log('Shift:', performance.now() - p)
+                }
+
+                this.updateCoordinates(player_controller.position) // Update coordinates panel
+
+                const eye_block_pos = camera.position.clone()
+                eye_block_pos.y += player_height
+                const block_in_camera = world.getBlock(...eye_block_pos.toArray())
+
+                for(const mat of Object.values(shader_materials)) {
+                    const cam_pos = camera.position // this.applyBobView(camera.position, elapsed)
+                    mat.uniforms.data.value.cameraPosition.copy(cam_pos)
+                    mat.uniforms.data.value.time = performance.now() / 1000
+                    mat.uniforms.data.value.in_water = block_in_camera?.id == 4 ? 1 : 0
+                    mat.uniforms.data.value.cameraOffset.y = player_height
+                    mat.uniforms.data.value.fogNear = (render_distance * chunk_size.x) * 0.8
+                    mat.uniforms.data.value.fogFar = render_distance * chunk_size.x * 0.9
+                }
+
+                this.chunkWorks()
+
+                renderer.render(scene, camera)
+                this.walk_speed_counter.add(camera.position)
+                stats.end()
+
+                requestAnimationFrame(this.animate.bind(this))
+
+            }
+
+        }
+
         const directions = [
             { x: 0, y: 1, z: 0 },  // Up
             { x: 0, y: -1, z: 0 }, // Bottom
@@ -1060,6 +1774,9 @@
             short_grass: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAFVBMVEUAAAC4t7igoKCRkZGDgYN2d3ZsbGyS5OzOAAAAAXRSTlMAQObYZgAAAG5JREFUeNptyDESgyAQheHHSvpt7DcDpCaGHMABqRnwBI73P4Ng7Wv+bx6eJgSmAVJguau0cC/eND6AK61dHeS/emCeXJwJEKNe4rhAFirWS4UlU4IsE3xsbTcx4Jda3Fzy0PWs+W8TwnEeOX+2CxhUDj0662krAAAAAElFTkSuQmCC'},
             dandelion: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAUklEQVQ4y2NgGAXDHfx/4/8fhMnW/O+a5f+Pc1VJNwSkAaZxb5YS2CCyDCFbMwyI17D8B2GyNHr1a/wPXa0Lpsm2HWYACJPlEpABZHsDBIixGQCyM01OrS9sngAAAABJRU5ErkJggg=='},
             oxeye_daisy: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAATlBMVEXr6+tR2/1vtE0nrPtXpDJVnzFRoStQmShVkzJRkTFBixxDhiPBQCM5fhYyeg4AAAD39/fW6Oj/7E/+1jn1uiebvb3xnSVVqy1Smi4XfASspZShAAAAEHRSTlMAAAAAAAAAAAAAAAAAAAAAHik/2wAAAGZJREFUeNptyFEOAiAMBNGqiCJWdgWE3v+ixsSkjXG+Jk/aT/IX5D7BkzgcSIDNgRi9czoA/TkAh8nRX6BDIkBmB6nETOJQz7dtSR308lhaItheSQO0YqvYNYDWZbkFyLojfLLjd97lCA7ioBDbWwAAAABJRU5ErkJggg=='},
+            glass: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAWklEQVQ4y2O48Orlf3Lxigs3/zOAGA0NDQzkYKwGkGJg9brtqAaQ6hoUA0DOIdULGC4gFXcfPEuZAQPvguFiADnxD7OULBcgqyfbBSiZCUSAMMg0GE0MhukDAIj/+eJKhLbdAAAAAElFTkSuQmCC'},
+            bricks: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAG1BMVEWplI2ihn3GaFGxYk2LbmebVkOPUD98RTZzPzGzwO+3AAAAeElEQVR42iXMsQ3DMAwF0T+CDWQCaQROYEALCBST2oWVWoVIl1KTeOyYSHHdw4FKiJQjQXYV2bvgHFc958eQlkfa7hCIb8EFXZ5Na23Ql41L3xMu1pQWUA6Rc/DPIdIOgU2rNrTCH/4CE5dInNHlr/A1Gx5crGnDD0ZzKBGoxix2AAAAAElFTkSuQmCC'},
+            oak_planks: {bin: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAFVBMVEXCnWK4lF+vj1WfhE2WdEF+YjdnUCyo+21oAAAAcElEQVR42g3CARXDIAwFwM/DAAk1kGQCVoKDDQeAA+JfQnvvwAV4XyD9CSk5hMS8yYUxR6wTG+WLjKQ3hFtvQgwX/RCbI9aIWHOjJMWrgonMzTqSuqt6RcwRZ+xALqkiJ0DJ7WZWWONO5o6zz3+ciAdixhUFVj2uwQAAAABJRU5ErkJggg=='},
         }
 
         const blocks_palette = {
@@ -1095,7 +1812,7 @@
                 null, // {color: [63/256, 118/256, 228/256], texture: textures.water_still},
                 null, // {color: [63/256, 118/256, 228/256], texture: textures.water_still},
                 null, // {color: [63/256, 118/256, 228/256], texture: textures.water_still},
-            ], is_solid: true, transparent: true, passable: 1},
+            ], is_solid: true, transparent: true, passable: 1, is_fluid: true},
             sand: {id: 5, faces: [
                 {color: [0.8, 0.8, 0.6], texture: textures.sand},
                 {color: [0.8, 0.8, 0.6], texture: textures.sand},
@@ -1136,13 +1853,45 @@
                 {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.gravel},
                 {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.gravel},
             ], is_solid: true},
-            short_grass: {id: 10, faces: [
+            stone_bricks: {id: 10, faces: [
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.stone_bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.stone_bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.stone_bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.stone_bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.stone_bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.stone_bricks},
+            ], is_solid: true},
+            glass: {id: 11, faces: [
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.glass},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.glass},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.glass},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.glass},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.glass},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.glass},
+            ], receive_ao: false, is_doubleside: true},
+            bricks: {id: 12, faces: [
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.bricks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.bricks},
+            ], is_solid: true},
+            oak_planks: {id: 13, faces: [
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.oak_planks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.oak_planks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.oak_planks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.oak_planks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.oak_planks},
+                {color: [0.5, 0.5, 0.5], flag: 4, texture: textures.oak_planks},
+            ], is_solid: true},
+            short_grass: {id: 14, faces: [
                 {color: [1, 1, 1], flag: 128 | 64, texture: textures.short_grass},
             ], style: 'planting', passable: 1},
-            dandelion: {id: 11, faces: [
+            dandelion: {id: 15, faces: [
                 {color: [1, 1, 1], flag: 128, texture: textures.dandelion},
             ], style: 'planting', passable: 1},
-            oxeye_daisy: {id: 12, faces: [
+            oxeye_daisy: {id: 16, faces: [
                 {color: [1, 1, 1], flag: 128, texture: textures.oxeye_daisy},
             ], style: 'planting', passable: 1},
         }
@@ -1239,6 +1988,7 @@
         globalThis.world = world
         globalThis.direction = direction
 
+        let save_positions = true
         let frame = 0
         let prev_rad = 0
         let stats
@@ -1273,7 +2023,32 @@
         scene.background = fog_color
         camera.position.set(0, start_position.y, 0)
 
-        // Создание геометрии сферы
+        function pseudoRandom(seed) {
+            let value = (seed < 0 ? seed + 2147483647 : seed) % 2147483647
+            return function() {
+                value = (value * 16807) % 2147483647
+                return value / 2147483647
+            }
+        }
+
+        function localRound(num, n = 2) {
+            return num.toLocaleString(undefined, {
+                minimumFractionDigits: n,
+                maximumFractionDigits: n
+            })
+        }
+
+        function printStat() {
+            console.log(`%cQuads: %c${scene_info.quads.toLocaleString()}, ` +
+                        `%cMemory usage: %c${(world.getMemoryUsage() / (1024 * 1024)).toFixed(2)}MB, `,
+                'font-weight: bold;', 'color: blue;', 
+                'font-weight: bold;', 'color: green;')
+            console.table(stata)
+        }
+    
+        const game = new Game()
+
+        // // Создание геометрии сферы
         // const radius = 48
         // const width_segments = 64 // 40 x 40 = 1600 полигонов
         // const height_segments = 64
@@ -1290,566 +2065,6 @@
         // const sphere = new THREE.Mesh(geometry, material)
         // sphere.position.set(64, 70, 64) // Координаты для размещения
         // scene.add(sphere)
-
-        const controls = new THREE.PointerLockControls(camera, document.body)
-
-        // Create an element to display coordinates
-        const coords_el = document.getElementById('coords')
-        updateGamemodeString()
-
-        function toggleGamemode() {
-            spectator_mode = !spectator_mode
-            updateGamemodeString()
-        }
-
-        function updateGamemodeString() {
-            document.getElementById('gamemode').innerText = spectator_mode ? 'Spectator' : 'Survival'
-        }
-
-        function addListeners() {
-
-            document.body.addEventListener('click', () => controls.lock())
-
-            // on mouse wheel
-            document.addEventListener('wheel', (event) => {
-                if(spectator_mode) {
-                    speed_mul *= event.deltaY < 0 ? 1.1 : 0.9
-                } else {
-                    inventory.select(event.deltaY > 0 ? 1 : -1)
-                }
-            })
-
-            document.addEventListener('mousedown', (event) => {
-                if (event.button === 0 && controls.isLocked) player_controller.breakBlock(event)
-                if (event.button === 1 && controls.isLocked) player_controller.cloneBlock()
-                if (event.button === 2 && controls.isLocked) player_controller.placeBlock()
-            })
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight
-                camera.updateProjectionMatrix()
-                renderer.setSize(window.innerWidth, window.innerHeight)
-            })
-
-            const handleKeyEvent = (event, is_key_down) => {
-                const key_state = is_key_down;
-                switch (event.code) {
-                    case 'KeyW': move_forward = key_state; break
-                    case 'KeyS': move_backward = key_state; break
-                    case 'KeyA': move_left = key_state; break
-                    case 'KeyD': move_right = key_state; break
-                    case 'ShiftLeft': move_down = key_state; break
-                    case 'Space': 
-                        if (key_state) player_controller.jump()
-                        move_up = key_state
-                        break
-                    case 'PageUp': {
-                        if(key_state) {
-                            render_distance = Math.min(64, render_distance + 1)
-                        }
-                        break
-                    }
-                    case 'PageDown': {
-                        if(key_state) {
-                            render_distance = Math.max(1, render_distance - 1)
-                        }
-                        break
-                    }
-                    case 'F4':
-                        if (!key_state) {
-                            save()
-                        }
-                        break
-                    case 'KeyR':
-                        if (!key_state) {
-                            let pos = localStorage.getItem('saved_pos')
-                            teleportTo(pos ? JSON.parse(pos) : DEFAULT_SPAWN_POS)
-                        }
-                        break
-                    case 'F8':
-                        if (key_state) teleportRandomly()
-                        event.preventDefault()
-                        event.stopPropagation()
-                        break;
-                    case 'KeyP':
-                        if (!key_state) printStat()
-                        break;
-                    case 'KeyG':
-                        if (!key_state) {
-                            toggleGamemode()
-                            save()
-                            event.preventDefault()
-                            event.stopPropagation()
-                        }
-                        break
-                }
-            };
-
-            document.addEventListener('keydown', (event) => handleKeyEvent(event, true))
-            document.addEventListener('keyup', (event) => handleKeyEvent(event, false))
-
-        }
-
-        function createShaderMaterial(texture, options = {}) {
-            texture.minFilter = THREE.NearestFilter
-            texture.magFilter = THREE.NearestFilter
-            texture.needsUpdate = true
-            return new THREE.ShaderMaterial({
-                vertexColors: true,
-                side: THREE.FrontSide,
-                ...options,
-                uniforms: {
-                    data: { 
-                        value: {
-                            cameraPosition: new THREE.Vector3(),
-                            cameraOffset: new THREE.Vector3(),
-                            fogColor: new THREE.Color(0.470588, 0.780392, 0.921569),
-                            fogNear: 100.0,
-                            time: 1.0,
-                            in_water: 0.0,
-                            fogFar: render_distance * chunk_size.x,
-                            texture: texture,
-                            // shadowMatrix: { value: light.shadow.matrix },
-                        }
-                    }
-                },
-                vertexShader: `
-                    struct Data {
-                        vec3 cameraPosition;
-                        vec3 cameraOffset;
-                        vec3 fogColor;
-                        float fogNear;
-                        float fogFar;
-                        float time;
-                        float in_water;
-                        sampler2D texture;
-                        // mat4 shadowMatrix[NUM_DIR_LIGHTS];
-                    };
-                    uniform Data data;
-
-                    // #include <common>
-                    // #include <shadowmap_pars_vertex>
-                    // #include <packing>
-
-                    varying vec3 vColor;
-                    varying vec3 vWorldPosition;
-                    varying vec4 vShadowCoord;
-                    varying vec2 vUv;
-                    attribute float flag;
-                    varying float vFlag;
-                    varying float vTime;
-                    varying float vInWater;
-                    varying vec3 vNormal;
-
-                    bool checkFlag(int bit) {
-                        float rounded = floor(vFlag + 0.5); // Round the value
-                        float divisor = float(bit);
-                        return mod(floor(rounded / divisor), 2.0) >= 1.0; // Check if the bit is set
-                    }
-
-                    void main() {
-                        vUv = uv;
-                        vTime = data.time;
-                        vInWater = data.in_water;
-                        vFlag = flag; // Send flag to fragment shader
-                        vColor = color;
-                        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-                        vWorldPosition = worldPosition.xyz;
-                        vNormal = normal;
-
-                        // waves
-                        vec3 modifiedPosition = position;
-                        if (checkFlag(1)) {
-                            // water waves
-                            const float PI = 3.14159265359;
-                            const float WAVE_NUMBER = 2.0 * PI / 4.0; // 2π / 2 метров
-                            const float AMPLITUDE = 0.03; // Мелкая амплитуда
-                            modifiedPosition.y -= 2.0 / 16.0;
-                            modifiedPosition.y += sin(position.x * WAVE_NUMBER + data.time * 2.0) * AMPLITUDE;
-                            modifiedPosition.y += cos(position.z * WAVE_NUMBER + data.time * 2.0) * AMPLITUDE;
-                        } else if (checkFlag(16)) {
-                            // leaves movements
-                            modifiedPosition.x += sin(position.x * 2.0 + data.time * 2.) * 0.0625;
-                            modifiedPosition.x += cos(position.z * 2.0 + data.time * 2.) * 0.0625;
-                            modifiedPosition.z += sin(position.x * 2.0 + data.time * 2.) * 0.0625;
-                            modifiedPosition.z += cos(position.z * 2.0 + data.time * 2.) * 0.0625;
-                        }
-
-                        // vShadowCoord = data.shadowMatrix[0] * worldPosition;
-                        gl_Position = projectionMatrix * modelViewMatrix * vec4(modifiedPosition - data.cameraOffset, 1.0);
-                    }
-                `,
-                fragmentShader: `
-                    varying vec2 vUv; // Receive UV from vertex shader
-                    varying float vTime;
-                    varying float vInWater;
-                    varying vec3 vColor;
-                    varying vec3 vWorldPosition;
-                    varying vec4 vShadowCoord;
-                    varying float vFlag;
-                    varying vec3 vNormal; // Receive normal from vertex shader
-
-                    struct Data {
-                        vec3 cameraPosition;
-                        vec3 cameraOffset;
-                        vec3 fogColor;
-                        float fogNear;
-                        float fogFar;
-                        float time;
-                        float in_water;
-                        sampler2D texture;
-                        // mat4 shadowMatrix[NUM_DIR_LIGHTS];
-                    };
-                    uniform Data data;
-
-                    // #include <shadowmap_pars_fragment>
-                    // #include <packing>
-
-                    const int FLAG_WATER_ANIMATED = 1;
-                    const int FLAG_GRASS_BLOCK_SIDE = 2;
-                    // const int UNUSED_FLAG_GRAVEL = 4;
-                    // const int FLAG_ = 8;
-                    const int FLAS_ANIMATED_LEAVES = 16;
-                    const int FLAG_NO_CAN_TAKE_AO = 128;
-                    const int FLAG_GRASS_COLOR = 64;
-
-                    float hash(vec3 p) {
-                        p = fract(p * 0.1031);
-                        p += dot(p, p.yzx + 19.19);
-                        return fract((p.x + p.y) * p.z);
-                    }
-
-                    bool checkFlag(int bit) {
-                        float rounded = floor(vFlag + 0.5); // Round the value
-                        float divisor = float(bit);
-                        return mod(floor(rounded / divisor), 2.0) >= 1.0; // Check if the bit is set
-                    }
-
-                    void main() {
-
-                        vec3 grass_color = vec3(84./256., 147./256., 42./256.);
-                        vec3 water_color = vec3(15./256., 94./256., 156./256.);
-
-                        float scale = 16.0;
-                        vec3 pp = vWorldPosition;
-                        if(checkFlag(8)) {
-                            pp.y /= 2.0;
-                        }
-                        vec3 quantizedPos = floor(pp * scale + 1e-3);
-                        float randomness = hash(quantizedPos);
-                        vec3 finalColor = vColor;
-
-                        vec2 uv = vUv;
-
-                        if (checkFlag(FLAG_WATER_ANIMATED)) {
-                            float frame_count = 32.0;
-                            float frame_height = 1.0 / frame_count;
-                            float current_frame = mod(floor(vTime * 16.), frame_count);
-                            uv.y = uv.y - frame_height * current_frame;
-                        }
-
-                        vec4 texColor = texture2D(data.texture, uv);
-
-                        if(texColor.a < 0.1) {
-                            discard;
-                        }
-
-                        if(checkFlag(FLAS_ANIMATED_LEAVES)) {
-                            texColor.rgb *= grass_color;
-                        }
-                        if(checkFlag(FLAG_WATER_ANIMATED)) {
-                            texColor.rgb *= water_color;
-                        }
-                        if(checkFlag(FLAG_GRASS_COLOR)) {
-                            texColor.rgb *= grass_color;
-                        }
-
-                        finalColor = texColor.rgb;
-
-                        if(vInWater > 0.0) {
-                            finalColor = mix(finalColor, water_color, 0.25);
-                        }
-
-                        if (checkFlag(FLAG_GRASS_BLOCK_SIDE)) {
-                            // Top part of grass block
-                            float quadY = mod(vWorldPosition.y, 1.0);
-                            float rr = vec3(randomness).y * 0.2;
-                            if (quadY > floor((0.7 + rr) * 16.) / 16.) {
-                                // Change the color for the top part of the quad
-                                finalColor = grass_color;
-                                vec3 colorDeviation = vec3(randomness) * 0.2 - 0.1;
-                                finalColor = clamp(finalColor + colorDeviation, 0.0, 1.0);
-                            }
-                        }
-
-                        finalColor *= vColor;
-
-                        if(checkFlag(FLAG_NO_CAN_TAKE_AO)) {
-                            finalColor *= 1.2;
-                        } else {
-                            // Calculate normal based on position
-                            vec3 normal = normalize(vNormal);
-                            // Apply color change depending on the normal
-                            if (normal.y > 0.5) {
-                                finalColor *= 1.2; // Lighten the top
-                            } else if (normal.y < -0.5) {
-                                finalColor *= 0.5; // Darken the bottom
-                            } else if (normal.z < 0.0) {
-                                finalColor *= 0.7; // Darken the north
-                            } else if (normal.z > 0.0) {
-                                finalColor *= 0.7; // Lighten the south
-                            } else {
-                                finalColor *= 0.9; // Other sides
-                            }
-                        }
-
-                        float distanceToCamera = length(vWorldPosition - data.cameraPosition);
-
-                        distanceToCamera *= vInWater > 0.0 ? 6.0 : 1.0;
-
-                        // Apply shadows
-                        // float shadowFactor = texture2DShadow(shadowMap[0], vShadowCoord.xyz); // Added for shadow calculation
-                        // finalColor *= shadowFactor; // Apply shadow factor
-
-                        // Apply fog
-                        float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
-                        vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
-                        // vec3 foggedColor = finalColor;
-
-                        float alpha = checkFlag(1) ? 0.75 : 1.0;
-                        gl_FragColor = vec4(foggedColor, alpha);
-                    }
-                `
-            })
-
-        }
-
-        async function createTexture() {
-            const canvas = document.createElement('canvas')
-            const ctx = canvas.getContext('2d')
-            const keys = Object.keys(textures)
-            // Load images and get their sizes
-            const images = await Promise.all(keys.map(key => {
-                const img = new Image()
-                img.src = 'data:image/png;base64,' + textures[key].bin
-                return new Promise(resolve => {
-                    img.onload = () => resolve({ key, img, width: img.width, height: img.height })
-                })
-            }))
-            // Determine the size of the atlas as the nearest power of two from the longest side of the textures
-            const max_side = Math.max(...images.map(img => Math.max(img.width, img.height)))
-            const atlas_size = Math.pow(2, Math.ceil(Math.log2(max_side)))
-            canvas.width = atlas_size
-            canvas.height = atlas_size
-            // Place textures in the atlas
-            let x_offset = 0
-            let y_offset = 0
-            let row_height = 0
-            images.forEach(img => {
-                if (x_offset + img.width > atlas_size) {
-                    x_offset = 0
-                    y_offset += row_height
-                    row_height = 0
-                }
-                if (y_offset + img.height > atlas_size) {
-                    throw new Error('Не удалось разместить все текстуры в атласе. Увеличьте размер атласа.')
-                }
-                ctx.drawImage(img.img, x_offset, y_offset, img.width, img.height)
-                // Save UV coordinates
-                textures[img.key].image = img.img
-                textures[img.key].uv = [
-                    x_offset / atlas_size,
-                    1 - y_offset / atlas_size,
-                    (x_offset + img.width) / atlas_size,
-                    1 - (y_offset + img.width) / atlas_size
-                ]
-                x_offset += img.width
-                row_height = Math.max(row_height, img.height)
-            })
-            // function downloadCanvas(canvas, filename = 'atlas.png') {
-            //     const link = document.createElement('a')
-            //     link.download = filename
-            //     link.href = canvas.toDataURL('image/png')
-            //     link.click()
-            // }
-            // downloadCanvas(canvas, 'texture-atlas.png')
-            return new THREE.Texture(canvas)
-        }
-
-        function getPlayerPosition() { return player_controller.position }
-
-        function getChunkMatrixAddr(chunk_addr) {
-            // globalThis.asdasdas ??= 0
-            // if(globalThis.asdasdas++%1000==0)console.log(globalThis.asdasdas)
-            const { player_matrix_x, player_matrix_z, player_chunk_addr } = player_controller
-            const x = (player_matrix_x + ((chunk_addr.x - player_chunk_addr.x) % matrix_side) + matrix_side) % matrix_side
-            const z = (player_matrix_z + ((chunk_addr.z - player_chunk_addr.z) % matrix_side) + matrix_side) % matrix_side
-            return _chunk_mx_addr.set(x, 0, z)
-        }
-
-        function getChunk(chunk_addr, ignore_check_addr = false) {
-            const { x, z } = getChunkMatrixAddr(chunk_addr)
-            const chunk = matrix[z * matrix_side + x]
-            if(chunk && (ignore_check_addr || chunk.addr.equals(chunk_addr))) {
-                return chunk
-            }
-        }
-
-        function localRound(num, n = 2) {
-            return num.toLocaleString(undefined, {
-                minimumFractionDigits: n,
-                maximumFractionDigits: n
-            })
-        }
-
-        // Function to update coordinates
-        function updateCoordinates(xyz) {
-            const { x, y, z } = xyz
-            if(Math.random() < 0.95) {
-                localStorage.setItem('player_position', JSON.stringify({x, y, z}))
-                localStorage.setItem('rotation', JSON.stringify({x: camera.rotation.x, y: camera.rotation.y, z: camera.rotation.z}))
-            }
-            if(frame % 5 === 0) {
-                const chunk_coord = world.getChunkAddr(x, y, z)
-                coords_el.textContent = `${localRound(x, 1)}, ${localRound(y, 1)}, ${localRound(z, 1)}\n`+
-                    `Chunk: ${chunk_coord.x}/${chunk_coord.y}/${chunk_coord.z}\n`+
-                    `Speed: ${walk_speed_counter.speed.toFixed(2)} km/h\n`+
-                    `Render distance: ${render_distance}`
-            }
-        }
-
-        function pseudoRandom(seed) {
-            let value = (seed < 0 ? seed + 2147483647 : seed) % 2147483647
-            return function() {
-                value = (value * 16807) % 2147483647
-                return value / 2147483647
-            }
-        }
-
-        // 
-        function applyBobView(position, elapsed_time) {
-            const is_moving = move_forward || move_backward || move_left || move_right
-            if(!player_controller.isGrounded) {
-                elapsed_time = 0
-            }
-            const { frequency, amplitudeX, amplitudeY } = bob_зarams
-            // If the player is moving, increase the time
-            if (is_moving) {
-                beft = 1
-            } else {
-                beft *= 0.9
-            }
-            bob_зarams.time += elapsed_time * 0.001 * beft
-            const offset_y = Math.abs(Math.sin(bob_зarams.time * frequency)) * amplitudeY // Shift by Y (sharp vertical swing)
-            const offset_x = Math.sin(bob_зarams.time * frequency * 0.5) * amplitudeX // Shift by X (smooth horizontal swing)
-            return new THREE.Vector3(
-                position.x + offset_x,
-                position.y - offset_y,
-                position.z
-            )
-        }
-
-        function teleportTo(pos) {
-            player_controller.setPosition(pos)
-            player_controller.velocity.y = 0
-        }
-
-        function teleportRandomly() {
-            const range = 2000000
-            teleportTo(new THREE.Vector3(
-                Math.round(Math.random() * range - range / 2) + 0.5,
-                Math.round(100 + Math.random() * 16),
-                Math.round(Math.random() * range - range / 2) + 0.5,
-            ))
-        }
-
-        function generateChunk(addr) {
-            let /** @type {Chunk} */ chunk = getChunk(addr, true)
-            chunk ||= new Chunk(world, chunk_size, seed)
-            chunk.dispose()
-            chunk.init(addr)
-            const p = performance.now()
-            chunk.generate()
-            stata.generated_chunks++
-            stata.generated_chunks_total_time += performance.now() - p
-            stata.generated_chunks_time_per_one = stata.generated_chunks_total_time / stata.generated_chunks
-            return chunk
-        }
-
-        function chunkAddrIsFarAway(center_addr, chunk_addr) {
-            return chunk_addr.distanceToSquared(center_addr) > render_distance ** 2
-        }
-
-        function calcCircularRelativeIndex(i, g) {
-            const n = matrix_side
-            return ((i - g + n + render_distance) % n) - render_distance
-        }
-
-        function save() {
-            const pos = {...getPlayerPosition()}
-            localStorage.setItem('player_position', JSON.stringify(pos))
-            localStorage.setItem('saved_pos', JSON.stringify(pos))
-            localStorage.setItem('spectator_mode', spectator_mode)
-            // localStorage.setItem('rotation', JSON.stringify(camera.rotation.toVector3()))
-        }
-
-        // 
-        const traverses = new VectorCollector()
-        const _traverses_pos = new THREE.Vector3()
-        function traverseSquareMatrix(center_x, center_z, size) {
-            _traverses_pos.set(center_x, center_z, size)
-            if(traverses.has(_traverses_pos)) {
-                return traverses.get(_traverses_pos)
-            }
-            const cx = center_x
-            const cz = center_z
-            center_x = Math.floor(size / 2)
-            center_z = Math.floor(size / 2)
-            const result = []
-            const directions = [
-                [0, 1], // right
-                [1, 0], // down
-                [0, -1], // left
-                [-1, 0] // up
-            ]
-            const visited = Array.from({ length: size }, () => Array(size).fill(false))
-            let x = center_x
-            let z = center_z
-            let step = 1
-            result.push([x, z])
-            visited[x][z] = true // Помечаем начальную ячейку как посещённую
-            while (result.length < size * size) {
-                for (let d = 0; d < 4; d++) {
-                    for (let i = 0; i < step; i++) {
-                        x = (x + directions[d][0] + size) % size
-                        z = (z + directions[d][1] + size) % size
-                        if (!visited[x][z]) {
-                            visited[x][z] = true
-                            result.push([x, z])
-                        }
-                    }
-                    if (d % 2 === 1) step++
-                }
-            }
-            let resp = []
-            result.filter((arr, i) => {
-                let [x, z] = arr
-                const sz2 = size / 2
-                x = (((x - center_x) % size)) % size
-                z = (((z - center_z) % size)) % size
-                let dist = x ** 2 + z ** 2
-                let ok = dist < (sz2 ** 2)
-                arr = [x + cx, z + cz]
-                if(ok) {
-                    x = (x + cx + size) % size
-                    z = (z + cz + size) % size
-                    resp.push(z * size + x)
-                }
-                return ok
-            })
-            traverses.set(_traverses_pos, resp)
-            return resp
-        }
 
         // const traverses = new Map()
         // function traverseCone(center_x, center_y, size, yaw_deg, tilt_deg, fov_deg) {
@@ -1922,180 +2137,6 @@
         //     console.log(traverses.size)
         //     return result
         // }
-
-        function chunkWorks() {
-            const player_xyz = getPlayerPosition()
-            const { player_matrix_x, player_matrix_z, player_chunk_addr } = player_controller
-            const { x: player_chunk_x, y: player_chunk_y, z: player_chunk_z } = world.getChunkAddr(player_xyz.x, player_xyz.y, player_xyz.z)
-            // const player_matrix_x = ((player_chunk_x % matrix_side) + matrix_side) % matrix_side
-            // const player_matrix_z = ((player_chunk_z % matrix_side) + matrix_side) % matrix_side
-            const cell_chunk_addr = new THREE.Vector3()
-            let max_generates = 3
-            // let max_generates = 2
-            // Получаем углы поворота в радианах
-            // const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ')
-            // const yaw = (THREE.MathUtils.radToDeg(euler.y) + 360) % 360
-            // const tilt = THREE.MathUtils.radToDeg(euler.x)
-            // const traverse = traverseCone(player_matrix_x, player_matrix_z, matrix_side, yaw, Math.abs(tilt), 120)
-            const traverse = traverseSquareMatrix(player_matrix_x, player_matrix_z, matrix_side)
-            for(let i = 0; i < traverse.length; i++) {
-                const ti = traverse[i]
-                const chunk = matrix[ti]
-                const x = ti % matrix_side
-                const z = Math.floor(ti / matrix_side)
-                cell_chunk_addr.set(
-                    player_chunk_addr.x + calcCircularRelativeIndex(x, player_matrix_x),
-                    player_chunk_addr.y,
-                    player_chunk_addr.z + calcCircularRelativeIndex(z, player_matrix_z),
-                )
-                if(!chunk || !chunk.addr.equals(cell_chunk_addr)) {
-                    matrix[ti] = generateChunk(cell_chunk_addr)
-                    if(--max_generates == 0) break
-                } else if(chunk.quads == 0 && chunk.neighbours_mask == 15) {
-                    const neib_nx = getChunk(cell_chunk_addr.clone().add({x: -1, y: 0, z: 0}))
-                    const neib_px = getChunk(cell_chunk_addr.clone().add({x: 1, y: 0, z: 0}))
-                    const neib_nz = getChunk(cell_chunk_addr.clone().add({x: 0, y: 0, z: -1}))
-                    const neib_pz = getChunk(cell_chunk_addr.clone().add({x: 0, y: 0, z: 1}))
-                    if(neib_nx && neib_px && neib_nz && neib_pz) {
-                        chunk.makeVertices()
-                        if(--max_generates == 0) break
-                    }
-                }
-            }
-        }
-
-        const walk_speed_counter = {
-            total_distance: 0,
-            start_time: 0,
-            speed: 0,
-            prev_pos: null,
-            add(pos) {
-                if(this.prev_pos) {
-                    this.total_distance += pos.distanceTo(this.prev_pos)
-                    const elapsed_time = (performance.now() - this.start_time) / 1000
-                    this.speed = (this.total_distance / elapsed_time * 3.6)
-                    if(elapsed_time > 0.2) {
-                        this.start_time = performance.now()
-                        this.total_distance = 0
-                    }
-                    this.prev_pos.copy(pos)
-                } else {
-                    this.start_time = performance.now()
-                    this.prev_pos = pos.clone()  
-                }
-            }
-        }
-
-        function animate() {
-
-            pnw1 ??= performance.now()
-            stats.begin()
-            const elapsed = Math.min(performance.now() - pnw1, 32)
-            pnw1 = performance.now()
-            frame++
-
-            const prev_player_pos = player_controller.position.clone()
-
-            if(spectator_mode) {
-                const speed = 0.025 * speed_mul
-                velocity.multiplyScalar(0.95)
-                if (move_forward) velocity.z += speed
-                if (move_backward) velocity.z -= speed
-                if (move_left) velocity.x += speed
-                if (move_right) velocity.x -= speed
-                if (move_up) velocity.y += speed
-                if (move_down) velocity.y -= speed
-                // Calculate the direction of movement relative to the camera
-                direction.set(0, 0, 0)
-                camera.getWorldDirection(direction)
-                direction.y = 0 // Only move in the XZ plane
-                direction.normalize()
-                const right = new THREE.Vector3().crossVectors(up, direction).normalize()
-                const move = new THREE.Vector3()
-                move.addScaledVector(direction, velocity.z)
-                move.addScaledVector(right, velocity.x)
-                move.y += velocity.y
-                player_controller.addPosition(move)
-            } else {
-                player_controller.update(elapsed)
-            }
-
-            const move = prev_player_pos.sub(player_controller.position)
-            camera.position.sub(move)
-            // camera.position.copy(applyBobView(camera.position, elapsed))
-            acc_shift.add(move)
-            acc_shift.y = 0
-
-            if(acc_shift.length() > 1024) {
-                camera.position.add(acc_shift)
-                let p = performance.now()
-                for(let i = 0; i < matrix.length; i++) {
-                    const chunk = matrix[i]
-                    if(chunk) {
-                        for(const mesh of Object.values(chunk.meshes)) {
-                            if(mesh) mesh.mesh.position.add(acc_shift)
-                        }
-                    }
-                }
-                acc_shift.set(0, 0, 0)
-                console.log('Shift:', performance.now() - p)
-            }
-
-            updateCoordinates(player_controller.position) // Update coordinates panel
-
-            const eye_block_pos = camera.position.clone()
-            eye_block_pos.y += player_height
-            const block_in_camera = world.getBlock(...eye_block_pos.toArray())
-
-            for(const mat of Object.values(shader_materials)) {
-                const cam_pos = camera.position // applyBobView(camera.position, elapsed)
-                mat.uniforms.data.value.cameraPosition.copy(cam_pos)
-                mat.uniforms.data.value.time = performance.now() / 1000
-                mat.uniforms.data.value.in_water = block_in_camera?.id == 4 ? 1 : 0
-                mat.uniforms.data.value.cameraOffset.y = player_height
-                mat.uniforms.data.value.fogNear = (render_distance * chunk_size.x) * 0.8
-                mat.uniforms.data.value.fogFar = render_distance * chunk_size.x * 0.9
-            }
-
-            chunkWorks()
-
-            renderer.render(scene, camera)
-            walk_speed_counter.add(camera.position)
-            stats.end()
-
-            requestAnimationFrame(animate)
-
-        }
-
-        function printStat() {
-            console.log(`%cQuads: %c${scene_info.quads.toLocaleString()}, ` +
-                        `%cMemory usage: %c${(world.getMemoryUsage() / (1024 * 1024)).toFixed(2)}MB, `,
-                'font-weight: bold;', 'color: blue;', 
-                'font-weight: bold;', 'color: green;')
-            console.table(stata)
-        }
-
-        createTexture().then(texture => {
-
-            shader_materials = {
-                regular: createShaderMaterial(texture),
-                transparent: createShaderMaterial(texture, { side: THREE.DoubleSide, transparent: true, depthWrite: false, depthTest: true, blending: THREE.NormalBlending}),
-                doubleside: createShaderMaterial(texture, { side: THREE.DoubleSide }),
-            }
-
-            console.log('Map:', render_distance * chunk_size.x, 'x', render_distance * chunk_size.z)
-
-            stats = new Stats()
-            stats.showPanel(0) // 0: FPS, 1: MS, 2: MB
-            document.body.appendChild(stats.domElement)
-
-            document.body.appendChild(renderer.domElement)
-
-            inventory = new Inventory()
-            addListeners()
-            animate()
-
-        })
 
     </script>
 </body>
