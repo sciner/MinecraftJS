@@ -1158,6 +1158,11 @@
                                 game.teleportTo(pos ? JSON.parse(pos) : DEFAULT_SPAWN_POS)
                             }
                             break
+                        case 'KeyF':
+                            if (!key_state) {
+                                draw_fog = !draw_fog
+                            }
+                            break
                         case 'F4':
                             if (!key_state) {
                                 game.save()
@@ -1204,6 +1209,7 @@
                                 fogNear: 100.0,
                                 time: 1.0,
                                 in_water: 0.0,
+                                draw_fog: draw_fog ? 1.0 : 0.0,
                                 fogFar: render_distance * chunk_size.x,
                                 texture: texture,
                                 // shadowMatrix: { value: light.shadow.matrix },
@@ -1217,6 +1223,7 @@
                             vec3 fogColor;
                             float fogNear;
                             float fogFar;
+                            float draw_fog;
                             float time;
                             float in_water;
                             sampler2D texture;
@@ -1292,6 +1299,7 @@
                             vec3 fogColor;
                             float fogNear;
                             float fogFar;
+                            float draw_fog;
                             float time;
                             float in_water;
                             sampler2D texture;
@@ -1409,9 +1417,13 @@
                             // finalColor *= shadowFactor; // Apply shadow factor
 
                             // Apply fog
-                            float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
-                            vec3 foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
-                            // vec3 foggedColor = finalColor;
+                            vec3 foggedColor;
+                            if(data.draw_fog > 0.0) {
+                                float fogFactor = smoothstep(data.fogNear, data.fogFar, distanceToCamera);
+                                foggedColor = mix(finalColor, vInWater > 0.0 ? water_color : data.fogColor, fogFactor);
+                            } else {
+                                foggedColor = finalColor;
+                            }
 
                             float alpha = checkFlag(1) ? 0.75 : 1.0;
                             gl_FragColor = vec4(foggedColor, alpha);
@@ -1735,7 +1747,8 @@
                     mat.uniforms.data.value.in_water = block_in_camera?.id == 4 ? 1 : 0
                     mat.uniforms.data.value.cameraOffset.y = player_height
                     mat.uniforms.data.value.fogNear = (render_distance * chunk_size.x) * 0.8
-                    mat.uniforms.data.value.fogFar = render_distance * chunk_size.x * 0.9
+                    mat.uniforms.data.value.fogFar = (render_distance + 0.5) * chunk_size.x // * 0.9
+                    mat.uniforms.data.value.draw_fog = draw_fog ? 1.0 : 0.0
                 }
 
                 this.chunkWorks()
@@ -1955,6 +1968,7 @@
         const fog_color         = new THREE.Color(0.470588, 0.780392, 0.921569).convertSRGBToLinear() // Sky color (light blue) like in Minecraft
         const pnw               = performance.now()
         let render_distance     = 8
+        let draw_fog            = true
         const chunk_size        = {x: 16, y: 128, z: 16}
         let matrix_side         = render_distance * 2 + 1
         /**
@@ -2044,6 +2058,8 @@
                 'font-weight: bold;', 'color: blue;', 
                 'font-weight: bold;', 'color: green;')
             console.table(stata)
+            console.log(scene_info)
+            console.log(matrix)
         }
     
         const game = new Game()
